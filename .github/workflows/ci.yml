@@ -25,8 +25,8 @@ jobs:
       - name: Build native DLL (Release x64)
         run: msbuild Native/CustomEffectRuntime.Native.vcxproj /p:Configuration=Release /p:Platform=x64
 
-      - name: Pack NuGet
-        run: dotnet pack LiquidGlassWinUI/LiquidGlassWinUI.csproj -c Release -o ./artifacts
+      - name: Build & Pack NuGet
+        run: dotnet pack LiquidGlassWinUI/LiquidGlassWinUI.csproj -c Release -p:Platform=x64 -o ./artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
