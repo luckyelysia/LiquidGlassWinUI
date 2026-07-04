@@ -43,11 +43,15 @@ jobs:
             --store-password-in-clear-text
           dotnet nuget push ./artifacts/*.nupkg --source github --skip-duplicate
 
-  # Push to nuget.org (manual trigger only)
+  # Push to nuget.org via OIDC Trusted Publisher (manual trigger only).
+  # No API key needed — the dotnet SDK exchanges a GitHub OIDC token with nuget.org.
+  # Requires: register this repo as a Trusted Publisher on nuget.org first.
   publish-nuget:
     needs: build
     runs-on: windows-latest
     if: github.event_name == 'workflow_dispatch'
+    permissions:
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -55,7 +59,7 @@ jobs:
           path: ./artifacts
 
       - name: Push to nuget.org
-        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push ./artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
 
   # Create GitHub Release
   release:
