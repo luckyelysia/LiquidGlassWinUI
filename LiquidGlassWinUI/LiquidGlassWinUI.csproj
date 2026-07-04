@@ -38,7 +38,6 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>winui;winui3;windowsappsdk;liquidglass;composition;effect;brush;xaml</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>liquidglass.png</PackageIcon>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- Deterministic, source-linked-ish outputs in Release. -->
     <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release'">true</ContinuousIntegrationBuild>
@@ -53,7 +52,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
   </ItemGroup>
 
   <!-- The liquid-glass HLSL is embedded as a manifest resource (read by
@@ -79,7 +77,8 @@
     <None Include="..\Native\Output\x64\Release\CustomEffectRuntimeNative.dll" Pack="true" PackagePath="runtimes\win-x64\native\CustomEffectRuntimeNative.dll" />
     <None Include="build\LiquidGlassWinUI.targets" Pack="true" PackagePath="build\LiquidGlassWinUI.targets" />
     <None Include="README.md" Pack="true" PackagePath="\" />
-    <None Include="Assets\liquidglass.png" Pack="true" PackagePath="\" />
+    <None Remove="Assets\liquidglass.png" />
+    <Content Remove="Assets\liquidglass.png" />
   </ItemGroup>
 
   <!-- Fail the pack early with an actionable message if the native project has not

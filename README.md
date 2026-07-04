@@ -163,14 +163,28 @@ dotnet build LiquidGlassDemo/LiquidGlassDemo.csproj -c Release
 
 Or open `LiquidGlassWinUI.slnx` in Visual Studio and build the whole solution.
 
+### Install
+
 ```powershell
-# Install from nuget.org
+# nuget.org
 dotnet add package LiquidGlassWinUI
 
-# Or from GitHub Packages
+# GitHub Packages
 dotnet nuget add source https://nuget.pkg.github.com/luckyelysia/index.json `
   --name github --username luckyelysia --password TOKEN --store-password-in-clear-text
 dotnet add package LiquidGlassWinUI --source github
+```
+
+> **Project-reference consumers:** MSBuild does not transitively copy native DLLs
+> from `<ProjectReference>`. If you reference the `.csproj` directly (not via NuGet),
+> add this to your project after building `Native\CustomEffectRuntime.Native` in
+> `Release|x64`:
+> ```xml
+> <Content Include="path\to\Native\Output\x64\Release\CustomEffectRuntimeNative.dll"
+>          CopyToOutputDirectory="PreserveNewest"
+>          Link="CustomEffectRuntimeNative.dll"
+>          Visible="false" />
+> ```
 ```
 
 ## Platform support

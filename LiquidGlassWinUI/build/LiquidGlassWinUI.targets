@@ -2,28 +2,36 @@
 <!--
   LiquidGlassWinUI — native-runtime wiring (auto-imported by NuGet into consuming projects).
 
-  LiquidGlassBrush P/Invokes CustomEffectRuntimeNative.dll, which ships as an x64-only
-  native binary under runtimes\win-x64\native. NuGet does not copy runtimes\<rid>\native
-  assets into a framework-dependent app's output on its own, so we surface the DLL as
-  Content and copy it next to the app's exe — the directory the Windows loader searches
-  when a DllImport is resolved by simple name.
+  LiquidGlassBrush P/Invokes CustomEffectRuntimeNative.dll, which ships under
+  runtimes\win-x64\native. NuGet does not copy runtimes\<rid>\native assets into
+  a framework-dependent app's output, so this targets file copies the DLL next to
+  the app's exe — the directory the Windows loader searches for DllImport by name.
+
+  Project-reference consumers: MSBuild does not transitively copy native DLLs from
+  <ProjectReference>. See README for the one-line Content item to add.
 -->
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
-  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\runtimes\win-x64\native\CustomEffectRuntimeNative.dll')">
-    <Content Include="$(MSBuildThisFileDirectory)..\runtimes\win-x64\native\CustomEffectRuntimeNative.dll">
-      <Link>CustomEffectRuntimeNative.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Visible>false</Visible>
-    </Content>
-  </ItemGroup>
+  <!-- Copy the native DLL from the NuGet package to the output directory.
+       Runs inside a target (not a static ItemGroup) so NuGet has already restored
+       the package and the DLL exists by the time this evaluates. -->
+  <Target Name="_LiquidGlassCopyNativeDll" BeforeTargets="GetCopyToOutputDirectoryItems">
+    <PropertyGroup>
+      <_LiquidGlassDll>$(MSBuildThisFileDirectory)..\runtimes\win-x64\native\CustomEffectRuntimeNative.dll</_LiquidGlassDll>
+    </PropertyGroup>
+    <ItemGroup Condition="Exists('$(_LiquidGlassDll)')">
+      <ContentWithTargetPath Include="$(_LiquidGlassDll)">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>CustomEffectRuntimeNative.dll</TargetPath>
+        <Visible>false</Visible>
+      </ContentWithTargetPath>
+    </ItemGroup>
+  </Target>
 
-  <!-- The native runtime is x64-only. Fail the build up front for explicit 32-bit/ARM
-       targets instead of producing an app that fails to load the DLL at runtime. AnyCPU
-       is allowed (the app must simply run as x64 on the host). -->
-  <Target Name="LiquidGlassWinUIEnsureX64" BeforeTargets="BuildCompile;Build">
-    <Error Condition="'$(PlatformTarget)' == 'x86' Or ('$(PlatformTarget)' == 'ARM' And '$(OS)' == 'Windows_NT')"
-           Text="LiquidGlassWinUI ships an x64-only native runtime and cannot run in a $(PlatformTarget) process. Set PlatformTarget to x64 (or AnyCPU on an x64 host)." />
+  <!-- The native runtime is x64-only. -->
+  <Target Name="_LiquidGlassEnsureX64" BeforeTargets="CoreCompile">
+    <Error Condition="'$(PlatformTarget)' == 'x86' Or '$(PlatformTarget)' == 'ARM' Or '$(PlatformTarget)' == 'arm'"
+           Text="LiquidGlassWinUI is x64-only and cannot run as $(PlatformTarget). Set PlatformTarget to x64." />
   </Target>
 
 </Project>
