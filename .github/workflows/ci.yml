@@ -60,7 +60,6 @@ jobs:
   publish-nuget:
     needs: build
     runs-on: windows-latest
-    if: github.event_name == 'workflow_dispatch'
     permissions:
       id-token: write
     steps:
