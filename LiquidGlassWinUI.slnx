@@ -1,0 +1,20 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="BlendProbe/BlendProbe.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="LiquidGlassDemo/LiquidGlassDemo.csproj" Id="d66f8173-d881-4630-9b2f-b99af6200162">
+    <Platform Solution="*|ARM64" Project="ARM64" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="*|x86" Project="x86" />
+    <Deploy />
+  </Project>
+  <Project Path="LiquidGlassWinUI/LiquidGlassWinUI.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="Native/CustomEffectRuntime.Native.vcxproj" Id="9f3c2a18-7b4d-4e8a-9c1b-3d5e7f901a2c" />
+</Solution>

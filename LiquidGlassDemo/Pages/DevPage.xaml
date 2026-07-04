@@ -1,0 +1,614 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+  x:Class="LiquidGlassDemo.Pages.DevPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:lg="using:LiquidGlassWinUI"
+  xmlns:local="using:LiquidGlassDemo.Pages"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  Background="#202020"
+  mc:Ignorable="d">
+  <Page.Resources>
+    <SolidColorBrush x:Key="CardA" Color="#FFEF5350" />
+    <SolidColorBrush x:Key="CardB" Color="#FFFFA726" />
+    <SolidColorBrush x:Key="CardC" Color="#FF66BB6A" />
+    <SolidColorBrush x:Key="CardD" Color="#FF42A5F5" />
+    <SolidColorBrush x:Key="QuoteBg" Color="#22FFFFFF" />
+    <SolidColorBrush x:Key="Pal1" Color="#FF26C6DA" />
+    <SolidColorBrush x:Key="Pal2" Color="#FFEC407A" />
+    <SolidColorBrush x:Key="Pal3" Color="#FFAB47BC" />
+    <SolidColorBrush x:Key="Pal4" Color="#FF7E57C2" />
+    <SolidColorBrush x:Key="Pal5" Color="#FF5C6BC0" />
+    <SolidColorBrush x:Key="Pal6" Color="#FF26A69A" />
+    <SolidColorBrush x:Key="Pal7" Color="#FF9CCC65" />
+    <SolidColorBrush x:Key="Pal8" Color="#FFFFCA28" />
+
+    <!--
+      Live-background looping animations (compositor-thread: RenderTransform only),
+      begun from OnLoaded. Continuously-moving content makes refraction of the
+      backdrop visibly update through the glass.
+    -->
+    <Storyboard x:Name="RotateAnim" RepeatBehavior="Forever">
+      <DoubleAnimation
+        Storyboard.TargetName="RotateBox"
+        Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+        From="0"
+        To="360"
+        Duration="0:0:3" />
+    </Storyboard>
+    <Storyboard
+      x:Name="PulseAnim"
+      AutoReverse="True"
+      RepeatBehavior="Forever">
+      <DoubleAnimation
+        Storyboard.TargetName="PulseBox"
+        Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+        From="1"
+        To="1.3"
+        Duration="0:0:1" />
+      <DoubleAnimation
+        Storyboard.TargetName="PulseBox"
+        Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+        From="1"
+        To="1.3"
+        Duration="0:0:1" />
+    </Storyboard>
+    <Storyboard
+      x:Name="BounceAnim"
+      AutoReverse="True"
+      RepeatBehavior="Forever">
+      <DoubleAnimation
+        Storyboard.TargetName="BounceDot"
+        Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+        From="0"
+        To="-26"
+        Duration="0:0:0.8" />
+    </Storyboard>
+  </Page.Resources>
+
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition />
+      <ColumnDefinition Width="340" />
+    </Grid.ColumnDefinitions>
+
+    <Grid.Transform3D>
+      <PerspectiveTransform3D />
+    </Grid.Transform3D>
+
+    <!--  Column 0: the live, scrollable scene the glass refracts (backdrop).  -->
+    <ScrollViewer
+      Grid.Column="0"
+      HorizontalScrollBarVisibility="Disabled"
+      HorizontalScrollMode="Disabled"
+      VerticalScrollBarVisibility="Auto">
+      <StackPanel Width="720">
+        <!--  header banner  -->
+        <Border
+          Height="220"
+          Padding="32"
+          CornerRadius="0">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+              <GradientStop Offset="0" Color="#FF7E1FA8" />
+              <GradientStop Offset="0.5" Color="#FF0E8AA7" />
+              <GradientStop Offset="1" Color="#FF1357B0" />
+            </LinearGradientBrush>
+          </Border.Background>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock
+              FontSize="56"
+              FontWeight="Bold"
+              Foreground="White"
+              Text="LIQUID GLASS" />
+            <TextBlock
+              Margin="0,8,0,0"
+              FontSize="20"
+              Foreground="#CCFFFFFF"
+              Text="Package consumer — LiquidGlassWinUI" />
+          </StackPanel>
+        </Border>
+
+        <TextBlock
+          Margin="32,24,32,8"
+          FontSize="22"
+          FontWeight="SemiBold"
+          Text="Overview" />
+        <TextBlock
+          Margin="32,0,32,16"
+          FontSize="15"
+          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+          Text="Drag the glass over this scene. The brush samples the backdrop behind it and refracts it in real time — text, gradients, the animated shapes, the colour palette. Every parameter on the right is bound TwoWay to the brush's own dependency properties (GlassBrush from the LiquidGlassWinUI NuGet package), with a local ParamCatalog as the property-name mirror."
+          TextWrapping="Wrap" />
+
+        <!--  LIVE animated regions  -->
+        <StackPanel Margin="32,8,32,12">
+          <TextBlock
+            Margin="0,0,0,10"
+            FontSize="22"
+            FontWeight="SemiBold"
+            Text="Live" />
+          <StackPanel
+            Margin="0,0,0,12"
+            Orientation="Horizontal"
+            Spacing="18">
+            <Border
+              x:Name="RotateBox"
+              Width="84"
+              Height="84"
+              CornerRadius="16"
+              RenderTransformOrigin="0.5,0.5">
+              <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                  <GradientStop Offset="0" Color="#FF00E5FF" />
+                  <GradientStop Offset="1" Color="#FF2979FF" />
+                </LinearGradientBrush>
+              </Border.Background>
+              <Border.RenderTransform>
+                <RotateTransform />
+              </Border.RenderTransform>
+            </Border>
+            <Border
+              x:Name="PulseBox"
+              Width="84"
+              Height="84"
+              Background="#FFEC407A"
+              CornerRadius="16"
+              RenderTransformOrigin="0.5,0.5">
+              <Border.RenderTransform>
+                <ScaleTransform />
+              </Border.RenderTransform>
+            </Border>
+            <Grid Width="84" Height="84">
+              <Border
+                x:Name="BounceDot"
+                Width="44"
+                Height="44"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Background="#FFB2FF59"
+                CornerRadius="22">
+                <Border.RenderTransform>
+                  <TranslateTransform />
+                </Border.RenderTransform>
+              </Border>
+            </Grid>
+            <ProgressRing
+              Width="60"
+              Height="60"
+              VerticalAlignment="Center"
+              IsActive="True" />
+          </StackPanel>
+          <ProgressBar
+            Height="14"
+            CornerRadius="7"
+            IsIndeterminate="True" />
+        </StackPanel>
+
+        <!--  coloured cards row  -->
+        <Grid Margin="32,8,32,16">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition />
+            <ColumnDefinition />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition />
+            <ColumnDefinition />
+          </Grid.ColumnDefinitions>
+          <Border
+            Grid.Column="0"
+            Height="120"
+            Background="{StaticResource CardA}"
+            CornerRadius="14" />
+          <Border
+            Grid.Column="1"
+            Height="120"
+            Background="{StaticResource CardB}"
+            CornerRadius="14" />
+          <Border
+            Grid.Column="3"
+            Height="120"
+            Background="{StaticResource CardC}"
+            CornerRadius="14" />
+          <Border
+            Grid.Column="4"
+            Height="120"
+            Background="{StaticResource CardD}"
+            CornerRadius="14" />
+        </Grid>
+
+        <!--  a big quote  -->
+        <Border
+          Margin="32,8,32,20"
+          Padding="28"
+          Background="{StaticResource QuoteBg}"
+          CornerRadius="16">
+          <TextBlock
+            FontSize="26"
+            FontStyle="Italic"
+            FontWeight="SemiBold"
+            Text="“Drag me over the text, the cards, the palette — the edges refract whatever is behind.”"
+            TextWrapping="Wrap" />
+        </Border>
+
+        <!--  colour palette  -->
+        <TextBlock
+          Margin="32,8,32,8"
+          FontSize="22"
+          FontWeight="SemiBold"
+          Text="Palette" />
+        <GridView
+          Margin="32,0,32,16"
+          IsHitTestVisible="False"
+          SelectionMode="None">
+          <Border
+            Width="90"
+            Height="90"
+            Background="{StaticResource Pal1}" />
+          <Border
+            Width="90"
+            Height="90"
+            Background="{StaticResource Pal2}" />
+          <Border
+            Width="90"
+            Height="90"
+            Background="{StaticResource Pal3}" />
+          <Border
+            Width="90"
+            Height="90"
+            Background="{StaticResource Pal4}" />
+          <Border
+            Width="90"
+            Height="90"
+            Background="{StaticResource Pal5}" />
+          <Border
+            Width="90"
+            Height="90"
+            Background="{StaticResource Pal6}" />
+          <Border
+            Width="90"
+            Height="90"
+            Background="{StaticResource Pal7}" />
+          <Border
+            Width="90"
+            Height="90"
+            Background="{StaticResource Pal8}" />
+        </GridView>
+
+        <!--  faux hero image  -->
+        <Border
+          Height="240"
+          Margin="32,8,32,20"
+          CornerRadius="16">
+          <Grid>
+            <Grid.Background>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Offset="0" Color="#FF102A43" />
+                <GradientStop Offset="1" Color="#FF334E68" />
+              </LinearGradientBrush>
+            </Grid.Background>
+            <Ellipse
+              Width="220"
+              Height="220"
+              Margin="-60,-60,0,0"
+              Fill="#88FFB300" />
+            <Ellipse
+              Width="260"
+              Height="260"
+              Margin="0,0,-80,-80"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Bottom"
+              Fill="#55EF5350" />
+            <TextBlock
+              Margin="24"
+              FontSize="20"
+              FontWeight="SemiBold"
+              Foreground="#CCFFFFFF"
+              Text="a faux hero image" />
+          </Grid>
+        </Border>
+
+        <!--  lorem  -->
+        <TextBlock
+          Margin="32,8,32,8"
+          FontSize="22"
+          FontWeight="SemiBold"
+          Text="Detail" />
+        <TextBlock
+          Margin="32,0,32,14"
+          FontSize="15"
+          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+          Text="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+          TextWrapping="Wrap" />
+        <TextBlock
+          Margin="32,0,32,14"
+          FontSize="15"
+          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+          Text="Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium."
+          TextWrapping="Wrap" />
+        <TextBlock
+          Margin="32,0,32,40"
+          FontSize="15"
+          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+          Text="Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt."
+          TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+
+
+    <!--
+      Column 1: control panel.
+    -->
+    <ScrollViewer
+      Grid.Column="1"
+      Padding="18"
+      Background="#E6000000">
+      <StackPanel Spacing="10">
+        <TextBlock
+          FontSize="18"
+          FontWeight="SemiBold"
+          Foreground="White"
+          Text="LiquidGlassWinUI" />
+        <TextBlock
+          FontSize="12"
+          Foreground="#9FFFFFFF"
+          Text="All params bound TwoWay to GlassBrush (LiquidGlassWinUI package). Drag the glass over the scene."
+          TextWrapping="Wrap" />
+
+        <!--  Developer quick-actions  -->
+        <StackPanel
+          Margin="0,4,0,0"
+          Orientation="Horizontal"
+          Spacing="6">
+          <Button
+            x:Name="CopyXamlBtn"
+            Click="CopyXamlBtn_Click"
+            Content="Copy XAML" />
+          <Button
+            x:Name="CopyCSharpBtn"
+            Click="CopyCSharpBtn_Click"
+            Content="Copy C#" />
+          <Button
+            x:Name="ResetBtn"
+            Click="ResetBtn_Click"
+            Content="Reset" />
+        </StackPanel>
+
+        <!--
+          Size — bound straight to the glass control's Width/Height
+          (FrameworkElement DPs), so the slider resizes the glass live.
+        -->
+        <TextBlock
+          Margin="0,8,0,0"
+          FontWeight="SemiBold"
+          Foreground="#FF8AC8FF"
+          Text="Size" />
+        <Slider
+          Header="Width"
+          Maximum="700"
+          Minimum="60"
+          SnapsTo="StepValues"
+          StepFrequency="1"
+          Value="{x:Bind GlassHost.Width, Mode=TwoWay}" />
+        <Slider
+          Header="Height"
+          Maximum="700"
+          Minimum="60"
+          SnapsTo="StepValues"
+          StepFrequency="1"
+          Value="{x:Bind GlassHost.Height, Mode=TwoWay}" />
+
+        <!--
+          Dynamic ParamCatalog controls (built in code-behind, bound by
+          property name to GlassBrush).
+        -->
+        <StackPanel x:Name="ControlsHost" Spacing="14">
+
+          <!--  ── Shape ──  -->
+          <TextBlock
+            Margin="0,8,0,0"
+            FontWeight="SemiBold"
+            Foreground="#FF8AC8FF"
+            Text="Shape" />
+          <Slider
+            Header="Corner Radius"
+            Maximum="1"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.ShapeRadius, Mode=TwoWay}" />
+          <Slider
+            Header="Roundness (squircle n)"
+            Maximum="7"
+            Minimum="2"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.ShapeRoundness, Mode=TwoWay}" />
+
+          <!--  ── Refraction ──  -->
+          <TextBlock
+            Margin="0,8,0,0"
+            FontWeight="SemiBold"
+            Foreground="#FF8AC8FF"
+            Text="Refraction" />
+          <Slider
+            Header="Thickness"
+            Maximum="80"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.RefThickness, Mode=TwoWay}" />
+          <Slider
+            Header="Factor (IOR)"
+            Maximum="4"
+            Minimum="1"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.RefFactor, Mode=TwoWay}" />
+          <Slider
+            Header="Dispersion"
+            Maximum="50"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.RefDispersion, Mode=TwoWay}" />
+          <Slider
+            Header="Dispersion Range"
+            Maximum="1"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.DispersionRange, Mode=TwoWay}" />
+          <Slider
+            Header="Fresnel Range"
+            Maximum="100"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.RefFresnelRange, Mode=TwoWay}" />
+          <Slider
+            Header="Fresnel Hardness"
+            Maximum="100"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.RefFresnelHardness, Mode=TwoWay}" />
+          <Slider
+            Header="Fresnel Factor"
+            Maximum="100"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.RefFresnelFactor, Mode=TwoWay}" />
+
+          <!--  ── Glare ──  -->
+          <TextBlock
+            Margin="0,8,0,0"
+            FontWeight="SemiBold"
+            Foreground="#FF8AC8FF"
+            Text="Glare" />
+          <Slider
+            Header="Range"
+            Maximum="100"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.GlareRange, Mode=TwoWay}" />
+          <Slider
+            Header="Hardness"
+            Maximum="100"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.GlareHardness, Mode=TwoWay}" />
+          <Slider
+            Header="Factor"
+            Maximum="120"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.GlareFactor, Mode=TwoWay}" />
+          <Slider
+            Header="Convergence"
+            Maximum="100"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.GlareConvergence, Mode=TwoWay}" />
+          <Slider
+            Header="Opposite Factor"
+            Maximum="100"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.GlareOppositeFactor, Mode=TwoWay}" />
+          <Slider
+            Header="Angle"
+            Maximum="180"
+            Minimum="-180"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.GlareAngle, Mode=TwoWay}" />
+
+          <!--  ── Blur ──  -->
+          <TextBlock
+            Margin="0,8,0,0"
+            FontWeight="SemiBold"
+            Foreground="#FF8AC8FF"
+            Text="Blur" />
+          <Slider
+            Header="Blur Amount"
+            Maximum="20"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.BlurAmount, Mode=TwoWay}" />
+
+          <!--  ── Tint ──  -->
+          <TextBlock
+            Margin="0,8,0,0"
+            FontWeight="SemiBold"
+            Foreground="#FF8AC8FF"
+            Text="Tint" />
+          <ColorPicker
+            x:Name="TintPicker"
+            ColorChanged="TintPicker_ColorChanged"
+            ColorSpectrumShape="Box"
+            IsAlphaEnabled="True"
+            IsAlphaSliderVisible="True"
+            IsColorSliderVisible="True"
+            IsHexInputVisible="True" />
+
+
+          <Slider
+            Header="Exposure"
+            Maximum="10"
+            Minimum="0.6"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.Exposure, Mode=TwoWay}" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+    <!--
+      Glass overlay (column 0, on top of the scene, draggable). The brush fills
+      the border; it is transparent outside the glass shape, so the scene shows
+      through except where the glass is. GlassBrush comes from the LiquidGlassWinUI
+      package and self-builds its pipeline (backdrop -> GaussianBlur -> glass).
+    -->
+    <Border
+      x:Name="GlassHost"
+      Grid.Column="0"
+      Width="400"
+      Height="400"
+      HorizontalAlignment="Center"
+      VerticalAlignment="Center"
+      ManipulationDelta="GlassHost_ManipulationDelta"
+      ManipulationMode="All"
+      ToolTipService.ToolTip="Drag me">
+      <Border.RenderTransform>
+        <TranslateTransform x:Name="GlassTransform" />
+      </Border.RenderTransform>
+      <Border.Background>
+        <lg:LiquidGlassBrush
+          x:Name="GlassBrush"
+          BlurAmount="1.93"
+          DispersionRange="0.39"
+          Exposure="1.2"
+          GlareAngle="-135.00"
+          GlareConvergence="100.00"
+          GlareFactor="71.52"
+          GlareHardness="13.00"
+          GlareRange="36.13"
+          RefDispersion="3.50"
+          RefFactor="3.37"
+          RefFresnelFactor="21.96"
+          RefFresnelHardness="0.00"
+          RefFresnelRange="57.84"
+          RefThickness="80.00"
+          ShapeRadius="0.92"
+          ShapeRoundness="3.84" />
+      </Border.Background>
+    </Border>
+  </Grid>
+</Page>

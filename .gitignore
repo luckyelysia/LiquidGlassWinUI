@@ -1,0 +1,27 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build output
+**/bin/
+**/obj/
+**/Output/
+**/publish/
+
+# C++/WinRT generated headers
+Native/Generated Files/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# .NET
+*.lock.json
+
+# OS
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  LiquidGlassWinUI — native-runtime wiring (auto-imported by NuGet into consuming projects).
+
+  LiquidGlassBrush P/Invokes CustomEffectRuntimeNative.dll, which ships as an x64-only
+  native binary under runtimes\win-x64\native. NuGet does not copy runtimes\<rid>\native
+  assets into a framework-dependent app's output on its own, so we surface the DLL as
+  Content and copy it next to the app's exe — the directory the Windows loader searches
+  when a DllImport is resolved by simple name.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\runtimes\win-x64\native\CustomEffectRuntimeNative.dll')">
+    <Content Include="$(MSBuildThisFileDirectory)..\runtimes\win-x64\native\CustomEffectRuntimeNative.dll">
+      <Link>CustomEffectRuntimeNative.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+  </ItemGroup>
+
+  <!-- The native runtime is x64-only. Fail the build up front for explicit 32-bit/ARM
+       targets instead of producing an app that fails to load the DLL at runtime. AnyCPU
+       is allowed (the app must simply run as x64 on the host). -->
+  <Target Name="LiquidGlassWinUIEnsureX64" BeforeTargets="BuildCompile;Build">
+    <Error Condition="'$(PlatformTarget)' == 'x86' Or ('$(PlatformTarget)' == 'ARM' And '$(OS)' == 'Windows_NT')"
+           Text="LiquidGlassWinUI ships an x64-only native runtime and cannot run in a $(PlatformTarget) process. Set PlatformTarget to x64 (or AnyCPU on an x64 host)." />
+  </Target>
+
+</Project>

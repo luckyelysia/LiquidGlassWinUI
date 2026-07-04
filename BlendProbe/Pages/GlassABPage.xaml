@@ -1,0 +1,70 @@
+<Page
+  x:Class="BlendProbe.Pages.GlassABPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  MaxWidth="5000"
+  Loaded="Page_Loaded"
+  mc:Ignorable="d">
+
+  <!--
+    Glass A/B 全验证场景. Shell declared here; the shared rich backdrop + the two glass
+    effect brushes (analytic reference vs 8-bit baked) are wired in code-behind. The two
+    glass Borders sit OVER the backdrop so each one's CreateBackdropBrush samples the SAME
+    shared scene — only the origin of the static fields differs between them.
+  -->
+  <Grid Background="#FF1A1A1A">
+    <ScrollViewer Padding="32,24,32,40">
+      <StackPanel MaxWidth="1400" Spacing="14">
+        <TextBlock FontSize="30" FontWeight="Bold" Foreground="#FFFFFFFF" Text="Glass A/B 全验证" />
+        <TextBlock
+          FontSize="13" Foreground="#FF9ACDFF" TextWrapping="Wrap"
+          Text="同一背景上并排两块玻璃：左 = in-shader float 解析参考（GlassRef），右 = 8-bit 烘焙重建（GlassBaked）。两侧都折射同一 texture0 背景，只有静态场的来源不同。视觉一致 ⇒ 烘焙无损放行；差异形态定位失败点（条带→某场 8-bit；形状偏移→坐标/res；无折射→texture0 绑定）。" />
+
+        <!-- bake-scale selector + baked-rect Mode slider -->
+        <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+          <TextBlock FontSize="13" Foreground="#FFCCCCCC" Text="烘焙分辨率：" VerticalAlignment="Center"/>
+          <RadioButton x:Name="Scale1"   GroupName="BakeScale" Content="1.0 (1:1)" Checked="OnScaleChanged" IsChecked="True"/>
+          <RadioButton x:Name="Scale05"  GroupName="BakeScale" Content="0.5"        Checked="OnScaleChanged"/>
+          <RadioButton x:Name="Scale025" GroupName="BakeScale" Content="0.25"       Checked="OnScaleChanged"/>
+        </StackPanel>
+        <Slider
+          x:Name="ModeSlider" Minimum="0" Maximum="3" StepFrequency="1" Value="0"
+          ValueChanged="OnModeChanged"
+          Header="Mode（右/烘焙）  0=烘焙玻璃 · 1=raw Tex0 · 2=raw Tex1 · 3=Tex0|Tex1 分屏" />
+
+        <!-- the stage: shared backdrop (back) + two glass overlays (front) -->
+        <Grid x:Name="Stage" MinHeight="470" Margin="0,4,0,0">
+          <Border x:Name="BackdropLayer" CornerRadius="10"/>
+          <Grid Margin="22">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="22"/>
+              <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Column="0" Grid.Row="0" FontSize="13" FontWeight="SemiBold" Foreground="#FFE8E8E8"
+                       Text="◀ 参考 · in-shader float" Margin="2,0,0,6"/>
+            <TextBlock Grid.Column="2" Grid.Row="0" FontSize="13" FontWeight="SemiBold" Foreground="#FFE8E8E8"
+                       Text="烘焙 · 8-bit 重建 ▶" Margin="2,0,0,6"/>
+            <Border Grid.Column="0" Grid.Row="1" x:Name="GlassRefBorder"/>
+            <Border Grid.Column="2" Grid.Row="1" x:Name="GlassBakedBorder"/>
+          </Grid>
+        </Grid>
+
+        <Border Background="#FF202630" BorderBrush="#FF3A4A5A" BorderThickness="1" CornerRadius="8" Padding="14">
+          <TextBlock FontSize="12" Foreground="#FFCCCCCC" TextWrapping="Wrap" Text="
+如何判读：
+• 主测（分辨率 1.0，Mode 0）：左右两块玻璃在同一背景上应肉眼一致 ⇒ sample2 绑定 + 8-bit 精度 + 端到端集成全部通过。
+• Mode 1/2/3（右块）：校验烘焙的 Tex0（R=merged 圆角剪影、G/B=梯度）与 Tex1（R=edgeFactor、G=fresnel、B=glareGeo）——区分烘焙/编码 bug 与真正的 8-bit 精度损失。
+• 分辨率 0.5 / 0.25：评估亚 1:1 烘焙 + 双线性放大 vs 1:1（生产想要亚 1:1）。
+要汇报：(a) 1:1 是否一致？(b) 哪个场出现 8-bit 暴阶，是否需要更紧/非线性编码？(c) 可接受的亚 1:1 分辨率？"/>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Page>

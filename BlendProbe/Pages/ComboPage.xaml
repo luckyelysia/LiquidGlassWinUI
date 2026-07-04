@@ -1,0 +1,32 @@
+<Page
+  x:Class="BlendProbe.Pages.ComboPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  Loaded="Page_Loaded"
+  mc:Ignorable="d">
+
+  <!--
+    Multi-effect combination showcase. Shell mirrors BlendPage (header + ScrollViewer +
+    StackPanel host); the 6 combo cards are built in code-behind because each chains
+    several CompositionEffectFactory stages (Win2D built-ins + custom DWM effects) with
+    per-stage animatable sliders. See ComboPage.xaml.cs::AddCard + the per-group builders.
+  -->
+  <Grid Background="#FF1A1A1A">
+    <ScrollViewer Padding="32,24,32,40">
+      <StackPanel x:Name="CardHost" MaxWidth="780" Spacing="16">
+        <TextBlock
+          FontSize="32"
+          FontWeight="Bold"
+          Foreground="#FFFFFFFF"
+          Text="Combo 组合链路" />
+        <TextBlock
+          FontSize="13"
+          Foreground="#FF9ACDFF"
+          Text="每组把多个 Win2D 内置 effect 与自定义 DWM effect 串成 ≥3 级管线，每级带可动画滑块。预览区下层是彩色场景（供 backdrop 采样），上层覆盖层是链路输出。HLSL 热更新：编辑源 .hlsl → 对应卡片自动重渲染。"
+          TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Page>

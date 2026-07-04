@@ -1,0 +1,85 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinUI 3 class library targeting Windows App SDK. net8 + Windows 10 SDK
+         19041, so any WinUI 3 project on net8 / 19041 or higher can consume the
+         package. The brush uses no APIs beyond this version. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RootNamespace>LiquidGlassWinUI</RootNamespace>
+    <AssemblyName>LiquidGlassWinUI</AssemblyName>
+    <OutputType>Library</OutputType>
+    <UseWinUI>true</UseWinUI>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+
+    <!-- The brush P/Invokes CustomEffectRuntimeNative.dll, which is built x64-only,
+         so this assembly is x64-only too (it cannot load in a 32-bit/ARM process). -->
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- NuGet package -->
+    <IsPackable>true</IsPackable>
+    <PackageId>LiquidGlassWinUI</PackageId>
+    <Title>Liquid Glass brush for WinUI 3</Title>
+    <Description>A XAML composition brush that renders an Apple-style "liquid glass"
+      material over backdrop content, for WinUI 3 / Windows App SDK apps. Exposes every
+      material parameter (refraction, glare, blur, tint, shape) as a dependency property
+      that binds directly from XAML. x64 only.</Description>
+    <Authors>LiquidGlassWinUI</Authors>
+    <Copyright>Copyright (c) LiquidGlassWinUI contributors</Copyright>
+    <PackageTags>winui;winui3;windowsappsdk;liquidglass;composition;effect;brush;xaml</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Deterministic, source-linked-ish outputs in Release. -->
+    <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release'">true</ContinuousIntegrationBuild>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- Produce the .nupkg on every Release build. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
+  </ItemGroup>
+
+  <!-- The liquid-glass HLSL is embedded as a manifest resource (read by
+       Effects.ShaderSourceLoader) instead of being deployed as loose files. The
+       native runtime consumes HLSL source as text bytes, so embedding is
+       functionally identical to the disk path but keeps the consumer's output
+       directory clean and removes any path fragility. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Effects\Shaders\LiquidGlass.hlsl" />
+    <EmbeddedResource Include="Effects\Shaders\BlurH.hlsl" />
+    <EmbeddedResource Include="Effects\Shaders\BlurV.hlsl" />
+  </ItemGroup>
+
+  <!--
+    Native runtime packaging. The x64 CustomEffectRuntimeNative.dll is taken straight
+    from the Native\CustomEffectRuntime.Native Release|x64 build output (no duplicate
+    binary checked in), and placed under runtimes\win-x64\native in the package. The
+    accompanying build\LiquidGlassWinUI.targets (imported automatically by NuGet into
+    consuming projects) surfaces that DLL as Content copied next to the consumer's exe,
+    which is where the Windows loader resolves the DllImport by simple name.
+  -->
+  <ItemGroup>
+    <None Include="..\Native\Output\x64\Release\CustomEffectRuntimeNative.dll" Pack="true" PackagePath="runtimes\win-x64\native\CustomEffectRuntimeNative.dll" />
+    <None Include="build\LiquidGlassWinUI.targets" Pack="true" PackagePath="build\LiquidGlassWinUI.targets" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Fail the pack early with an actionable message if the native project has not
+       been built in Release|x64 yet, instead of shipping a package without the DLL. -->
+  <Target Name="EnsureNativeEffectDllBuilt" BeforeTargets="Pack;GenerateNuspec">
+    <Error Condition="!Exists('..\Native\Output\x64\Release\CustomEffectRuntimeNative.dll')" Text="CustomEffectRuntimeNative.dll not found at ..\Native\Output\x64\Release\. Build the CustomEffectRuntime.Native project in Release|x64 before packing LiquidGlassWinUI." />
+  </Target>
+
+</Project>

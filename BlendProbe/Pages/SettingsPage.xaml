@@ -1,0 +1,35 @@
+<Page
+  x:Class="BlendProbe.Pages.SettingsPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  mc:Ignorable="d">
+
+  <Grid Padding="32">
+    <StackPanel MaxWidth="640" Spacing="16">
+      <TextBlock
+        FontSize="40"
+        FontWeight="Bold"
+        Foreground="#ffffff"
+        Text="设置" />
+
+      <ToggleSwitch
+        Header="示例开关"
+        OffContent="关"
+        OnContent="开" />
+
+      <NumberBox
+        Header="示例数值"
+        Maximum="100"
+        Minimum="0"
+        Value="42" />
+
+      <ComboBox Header="示例选项" SelectedIndex="0">
+        <ComboBoxItem Content="选项 A" />
+        <ComboBoxItem Content="选项 B" />
+        <ComboBoxItem Content="选项 C" />
+      </ComboBox>
+    </StackPanel>
+  </Grid>
+</Page>

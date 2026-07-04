@@ -1,0 +1,61 @@
+<Window
+  x:Class="BlendProbe.MainWindow"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  Title="BlendProbe"
+  mc:Ignorable="d">
+  <Window.SystemBackdrop>
+    <MicaBackdrop />
+  </Window.SystemBackdrop>
+
+  <!--
+    NavigationView shell. Pane holds the nav items; content pages render inside
+    the Frame below. The built-in Settings item (IsSettingsVisible) sits in the
+    pane footer; everything else comes from MenuItems.
+  -->
+  <Grid Loaded="OnLoaded">
+    <NavigationView
+      x:Name="NavView"
+      IsBackButtonVisible="Collapsed"
+      IsSettingsVisible="True"
+      OpenPaneLength="220"
+      PaneDisplayMode="Left"
+      PaneTitle="BlendProbe"
+      SelectionChanged="NavView_SelectionChanged">
+      <NavigationView.MenuItems>
+        <NavigationViewItem
+          Content="首页"
+          Icon="Home"
+          Tag="Home" />
+        <NavigationViewItem
+          Content="Blend"
+          Icon="AllApps"
+          Tag="Blend" />
+        <NavigationViewItem
+          Content="Combo"
+          Icon="Filter"
+          Tag="Combo" />
+        <NavigationViewItem
+          Content="Mask 绑定"
+          Icon="View"
+          Tag="MaskBind" />
+        <NavigationViewItem
+          Content="Glass A/B"
+          Icon="Pictures"
+          Tag="GlassAB" />
+        <NavigationViewItem
+          Content="Backdrop延迟"
+          Icon="Send"
+          Tag="BackdropLatency" />
+        <NavigationViewItem
+          Content="Multi-Flatten"
+          Icon="Document"
+          Tag="MultiFlatten" />
+      </NavigationView.MenuItems>
+
+      <Frame x:Name="ContentFrame" />
+    </NavigationView>
+  </Grid>
+</Window>

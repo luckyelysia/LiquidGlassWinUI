@@ -1,0 +1,33 @@
+<Page
+  x:Class="BlendProbe.Pages.MultiFlattenPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  Loaded="Page_Loaded"
+  mc:Ignorable="d">
+
+  <!--
+    Multi-Flatten verification page. Two cards probe the N-source FlattenSource
+    extension: N=1 regression, N=2 mixed wiring (sampler + color).
+    Cards are built in code-behind; each creates a custom DWM effect with its own
+    flatten topology and binds backdrop/color sources via BackdropEffectBrush.
+    Hot-reload: editing the source .hlsl → debounced mirror → per-card rebuild.
+  -->
+  <Grid Background="#FF1A1A1A">
+    <ScrollViewer Padding="32,24,32,40">
+      <StackPanel x:Name="CardHost" MaxWidth="780" Spacing="16">
+        <TextBlock
+          FontSize="32"
+          FontWeight="Bold"
+          Foreground="#FFFFFFFF"
+          Text="Multi-Flatten 多纹理验证" />
+        <TextBlock
+          FontSize="13"
+          Foreground="#FF9ACDFF"
+          Text="验证 N-source FlattenSource 扩展。DWM 只有一个 texture0 绑定；附加 source 走颜色路由（预采样 float4）。HLSL 热更新：编辑 .hlsl 源文件 → 对应卡片自动重渲染。"
+          TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Page>
