@@ -30,10 +30,15 @@
       material over backdrop content, for WinUI 3 / Windows App SDK apps. Exposes every
       material parameter (refraction, glare, blur, tint, shape) as a dependency property
       that binds directly from XAML. x64 only.</Description>
-    <Authors>LiquidGlassWinUI</Authors>
-    <Copyright>Copyright (c) LiquidGlassWinUI contributors</Copyright>
+    <Authors>luckyelysia</Authors>
+    <Copyright>Copyright (c) luckyelysia</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/luckyelysia/LiquidGlassWinUI</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/luckyelysia/LiquidGlassWinUI.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageTags>winui;winui3;windowsappsdk;liquidglass;composition;effect;brush;xaml</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>liquidglass.png</PackageIcon>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- Deterministic, source-linked-ish outputs in Release. -->
     <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release'">true</ContinuousIntegrationBuild>
@@ -74,6 +79,7 @@
     <None Include="..\Native\Output\x64\Release\CustomEffectRuntimeNative.dll" Pack="true" PackagePath="runtimes\win-x64\native\CustomEffectRuntimeNative.dll" />
     <None Include="build\LiquidGlassWinUI.targets" Pack="true" PackagePath="build\LiquidGlassWinUI.targets" />
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="Assets\liquidglass.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <!-- Fail the pack early with an actionable message if the native project has not

@@ -163,14 +163,15 @@ dotnet build LiquidGlassDemo/LiquidGlassDemo.csproj -c Release
 
 Or open `LiquidGlassWinUI.slnx` in Visual Studio and build the whole solution.
 
-### NuGet pack
-
 ```powershell
-dotnet pack LiquidGlassWinUI/LiquidGlassWinUI.csproj -c Release
-```
+# Install from nuget.org
+dotnet add package LiquidGlassWinUI
 
-The resulting `.nupkg` includes the x64 native DLL under `runtimes/win-x64/native/` and
-auto-imported `.targets` that copy it to the consumer's output directory.
+# Or from GitHub Packages
+dotnet nuget add source https://nuget.pkg.github.com/luckyelysia/index.json `
+  --name github --username luckyelysia --password TOKEN --store-password-in-clear-text
+dotnet add package LiquidGlassWinUI --source github
+```
 
 ## Platform support
 

@@ -1,0 +1,77 @@
+name: Build & Pack
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build native DLL (Release x64)
+        run: msbuild Native/CustomEffectRuntime.Native.vcxproj /p:Configuration=Release /p:Platform=x64
+
+      - name: Pack NuGet
+        run: dotnet pack LiquidGlassWinUI/LiquidGlassWinUI.csproj -c Release -o ./artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: ./artifacts/*.nupkg
+
+  # Push to GitHub Packages (NuGet registry)
+  publish-github:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: ./artifacts
+
+      - name: Push to GitHub Packages
+        run: |
+          dotnet nuget add source --name github https://nuget.pkg.github.com/luckyelysia/index.json `
+            --username luckyelysia --password ${{ secrets.GITHUB_TOKEN }} `
+            --store-password-in-clear-text
+          dotnet nuget push ./artifacts/*.nupkg --source github --skip-duplicate
+
+  # Push to nuget.org (manual trigger only)
+  publish-nuget:
+    needs: build
+    runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: ./artifacts
+
+      - name: Push to nuget.org
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+  # Create GitHub Release
+  release:
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: ./artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/*.nupkg
+          generate_release_notes: true

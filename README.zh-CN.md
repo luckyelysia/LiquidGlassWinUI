@@ -155,14 +155,15 @@ dotnet build LiquidGlassDemo/LiquidGlassDemo.csproj -c Release
 
 或在 Visual Studio 中打开 `LiquidGlassWinUI.slnx`，构建整个解决方案。
 
-### NuGet 打包
-
 ```powershell
-dotnet pack LiquidGlassWinUI/LiquidGlassWinUI.csproj -c Release
-```
+# 从 nuget.org 安装
+dotnet add package LiquidGlassWinUI
 
-生成的 `.nupkg` 包含 x64 原生 DLL（位于 `runtimes/win-x64/native/`）和自动导入的
-`.targets` 文件，后者将 DLL 复制到消费者输出目录。
+# 或从 GitHub Packages 安装
+dotnet nuget add source https://nuget.pkg.github.com/luckyelysia/index.json `
+  --name github --username luckyelysia --password TOKEN --store-password-in-clear-text
+dotnet add package LiquidGlassWinUI --source github
+```
 
 ## 平台支持
 
