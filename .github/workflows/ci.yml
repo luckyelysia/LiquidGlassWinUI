@@ -11,8 +11,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages (native)
+        run: msbuild Native/CustomEffectRuntime.Native.vcxproj /t:Restore /p:Configuration=Release /p:Platform=x64
 
       - name: Build native DLL (Release x64)
         run: msbuild Native/CustomEffectRuntime.Native.vcxproj /p:Configuration=Release /p:Platform=x64
