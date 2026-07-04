@@ -26,7 +26,7 @@ jobs:
         run: msbuild Native/CustomEffectRuntime.Native.vcxproj /p:Configuration=Release /p:Platform=x64
 
       - name: Build managed library
-        run: dotnet build LiquidGlassWinUI/LiquidGlassWinUI.csproj -c Release -p:Platform=x64
+        run: dotnet build LiquidGlassWinUI/LiquidGlassWinUI.csproj -c Release -p:Platform=x64 -p:GeneratePackageOnBuild=false
 
       - name: Pack NuGet
         run: dotnet pack LiquidGlassWinUI/LiquidGlassWinUI.csproj -c Release -p:Platform=x64 --no-build -o ./artifacts
