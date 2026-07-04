@@ -45,9 +45,10 @@ jobs:
           path: ./artifacts
 
       - name: Push to GitHub Packages
+        shell: bash
         run: |
-          dotnet nuget add source --name github https://nuget.pkg.github.com/luckyelysia/index.json `
-            --username luckyelysia --password ${{ secrets.GITHUB_TOKEN }} `
+          dotnet nuget add source --name github https://nuget.pkg.github.com/luckyelysia/index.json \
+            --username luckyelysia --password ${{ secrets.GITHUB_TOKEN }} \
             --store-password-in-clear-text
           dotnet nuget push ./artifacts/*.nupkg --source github --skip-duplicate
 
@@ -67,6 +68,7 @@ jobs:
           path: ./artifacts
 
       - name: Push to nuget.org
+        shell: bash
         run: dotnet nuget push ./artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
 
   # Create GitHub Release
@@ -85,5 +87,5 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ./artifacts/*.nupkg
+          files: ./artifacts/LiquidGlassWinUI.*.nupkg
           generate_release_notes: true
