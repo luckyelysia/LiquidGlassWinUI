@@ -28,14 +28,11 @@ jobs:
       - name: Build & Pack NuGet
         run: dotnet pack LiquidGlassWinUI/LiquidGlassWinUI.csproj --configuration Release --output ./artifacts
 
-      - name: Debug — list artifacts
-        run: dir ./artifacts
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: nupkg
-          path: ./artifacts/*.nupkg
+          path: ./artifacts/
 
   # Push to GitHub Packages (NuGet registry)
   publish-github:
