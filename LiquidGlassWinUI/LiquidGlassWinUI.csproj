@@ -36,6 +36,7 @@
     <PackageProjectUrl>https://github.com/luckyelysia/LiquidGlassWinUI</PackageProjectUrl>
     <RepositoryUrl>https://github.com/luckyelysia/LiquidGlassWinUI.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <Version>1.0.1</Version>
     <PackageTags>winui;winui3;windowsappsdk;liquidglass;composition;effect;brush;xaml</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

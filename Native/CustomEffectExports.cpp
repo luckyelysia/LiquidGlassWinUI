@@ -88,7 +88,7 @@ namespace
     // property needs a distinct function address. We hand out one slot per
     // property from a fixed table; each slot stores that property's default and
     // is published atomically because the thunk can be invoked from a DWM thread.
-    constexpr int kMaxPropertySlots = 64;
+    constexpr int kMaxPropertySlots = 256;
 
     struct PropertyDefaultSlot
     {

@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+  x:Class="LiquidGlassDemo.Pages.DialPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:lg="using:LiquidGlassWinUI"
+  xmlns:local="using:LiquidGlassDemo.Pages"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  mc:Ignorable="d">
+
+  <Page.Resources>
+    <!-- Sub-label under each digit -->
+    <Style x:Key="DialSubLabel" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="#99FFFFFF" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,-3,0,0" />
+    </Style>
+
+    <!-- Circular glass dial key.
+         GlassBorder picks up the Button's own Background via TemplateBinding —
+         each button sets its own LiquidGlassBrush inline, giving every key an
+         independent refraction. -->
+    <Style x:Key="DialKeyStyle" TargetType="Button">
+      <Setter Property="Width" Value="76" />
+      <Setter Property="Height" Value="76" />
+      <Setter Property="FontSize" Value="28" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid RenderTransformOrigin="0.5,0.5">
+              <Grid.RenderTransform>
+                <ScaleTransform x:Name="ScaleTransform" ScaleX="1" ScaleY="1" />
+              </Grid.RenderTransform>
+
+              <!-- Glass circle — picks up per-button Background (LiquidGlassBrush) -->
+              <Border x:Name="GlassBorder" CornerRadius="38"
+                      Background="{TemplateBinding Background}" />
+
+              <!-- White tint overlay — fades in on press -->
+              <Border
+                x:Name="TintOverlay"
+                Background="White"
+                CornerRadius="38"
+                Opacity="0" />
+
+              <!-- Number / icon -->
+              <ContentPresenter HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+
+              <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="CommonStates">
+
+                  <VisualStateGroup.Transitions>
+                    <!-- Hover in: bouncy pop -->
+                    <VisualTransition GeneratedDuration="0:0:0.25" To="PointerOver">
+                      <VisualTransition.GeneratedEasingFunction>
+                        <BackEase Amplitude="0.35" EasingMode="EaseOut" />
+                      </VisualTransition.GeneratedEasingFunction>
+                    </VisualTransition>
+
+                    <!-- Hover out: smooth settle -->
+                    <VisualTransition GeneratedDuration="0:0:0.18" From="PointerOver">
+                      <VisualTransition.GeneratedEasingFunction>
+                        <CubicEase EasingMode="EaseOut" />
+                      </VisualTransition.GeneratedEasingFunction>
+                    </VisualTransition>
+
+                    <!-- Press in: quick squash -->
+                    <VisualTransition GeneratedDuration="0:0:0.08" To="Pressed">
+                      <VisualTransition.GeneratedEasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                      </VisualTransition.GeneratedEasingFunction>
+                    </VisualTransition>
+
+                    <!-- Press out: ease back -->
+                    <VisualTransition GeneratedDuration="0:0:0.15" From="Pressed">
+                      <VisualTransition.GeneratedEasingFunction>
+                        <CubicEase EasingMode="EaseOut" />
+                      </VisualTransition.GeneratedEasingFunction>
+                    </VisualTransition>
+                  </VisualStateGroup.Transitions>
+
+                  <VisualState x:Name="Normal">
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleX" To="1" Duration="0" />
+                      <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleY" To="1" Duration="0" />
+                      <DoubleAnimation Storyboard.TargetName="TintOverlay" Storyboard.TargetProperty="Opacity" To="0" Duration="0" />
+                    </Storyboard>
+                  </VisualState>
+
+                  <VisualState x:Name="PointerOver">
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0" />
+                      <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0" />
+                    </Storyboard>
+                  </VisualState>
+
+                  <VisualState x:Name="Pressed">
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleX" To="1.2" Duration="0" />
+                      <DoubleAnimation Storyboard.TargetName="ScaleTransform" Storyboard.TargetProperty="ScaleY" To="1.2" Duration="0" />
+                      <DoubleAnimation Storyboard.TargetName="TintOverlay" Storyboard.TargetProperty="Opacity" To="0.45" Duration="0" />
+                    </Storyboard>
+                  </VisualState>
+
+                </VisualStateGroup>
+              </VisualStateManager.VisualStateGroups>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Page.Resources>
+
+  <Grid>
+    <!-- Full-page background image -->
+    <Image Source="/Assets/backdrop.jpg" Stretch="UniformToFill" />
+
+    <!-- Dark scrim -->
+    <Border Background="#77000000" />
+
+    <!-- ── Centred dial pad — each button carries its own brush ── -->
+    <StackPanel
+      HorizontalAlignment="Center"
+      VerticalAlignment="Center"
+      Spacing="14">
+
+      <!-- Row 1 -->
+      <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="16">
+        <StackPanel>
+          <Button Content="1" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text=" " />
+        </StackPanel>
+        <StackPanel>
+          <Button Content="2" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text="ABC" />
+        </StackPanel>
+        <StackPanel>
+          <Button Content="3" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text="DEF" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Row 2 -->
+      <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="16">
+        <StackPanel>
+          <Button Content="4" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text="GHI" />
+        </StackPanel>
+        <StackPanel>
+          <Button Content="5" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text="JKL" />
+        </StackPanel>
+        <StackPanel>
+          <Button Content="6" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text="MNO" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Row 3 -->
+      <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="16">
+        <StackPanel>
+          <Button Content="7" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text="PQRS" />
+        </StackPanel>
+        <StackPanel>
+          <Button Content="8" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text="TUV" />
+        </StackPanel>
+        <StackPanel>
+          <Button Content="9" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text="WXYZ" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Row 4 -->
+      <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="16">
+        <StackPanel>
+          <Button Content="*" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text=" " />
+        </StackPanel>
+        <StackPanel>
+          <Button Content="0" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text="+" />
+        </StackPanel>
+        <StackPanel>
+          <Button Content="#" Style="{StaticResource DialKeyStyle}">
+            <Button.Background>
+              <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+            </Button.Background>
+          </Button>
+          <TextBlock Style="{StaticResource DialSubLabel}" Text=" " />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Call button -->
+      <Button Margin="0,6,0,0" Style="{StaticResource DialKeyStyle}">
+        <Button.Background>
+          <lg:LiquidGlassBrush BlurAmount="0" RefFactor="2.0" RefThickness="30" ShapeRadius="1" ShapeRoundness="0" />
+        </Button.Background>
+        <FontIcon
+          FontFamily="{StaticResource SymbolThemeFontFamily}"
+          FontSize="28"
+          Glyph="&#xE717;" />
+      </Button>
+    </StackPanel>
+  </Grid>
+</Page>

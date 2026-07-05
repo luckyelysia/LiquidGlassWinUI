@@ -49,18 +49,14 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\LiquidGlassWinUI\LiquidGlassWinUI.csproj" />
-  </ItemGroup>
 
   <!-- Native DLL for project-reference consumers: MSBuild doesn't transitively
        copy native files from referenced projects, so we include it directly. -->
   <ItemGroup>
-    <Content Include="..\Native\Output\x64\Release\CustomEffectRuntimeNative.dll"
-             Condition="Exists('..\Native\Output\x64\Release\CustomEffectRuntimeNative.dll')"
-             CopyToOutputDirectory="PreserveNewest"
-             Link="CustomEffectRuntimeNative.dll"
-             Visible="false" />
+    <Content Include="..\Native\Output\x64\Release\CustomEffectRuntimeNative.dll" Condition="Exists('..\Native\Output\x64\Release\CustomEffectRuntimeNative.dll')" CopyToOutputDirectory="PreserveNewest" Link="CustomEffectRuntimeNative.dll" Visible="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LiquidGlassWinUI\LiquidGlassWinUI.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Page Update="Pages\DevPage.xaml">

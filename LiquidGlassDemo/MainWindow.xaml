@@ -14,5 +14,25 @@
     <MicaBackdrop />
   </Window.SystemBackdrop>
 
-  <Frame x:Name="MainFrame" />
+  <NavigationView
+    x:Name="MainNavView"
+    IsBackButtonVisible="Collapsed"
+    IsSettingsVisible="False"
+    PaneDisplayMode="LeftCompact">
+    <NavigationView.MenuItems>
+      <NavigationViewItem
+        Content="Home"
+        Icon="Home"
+        Tag="DevPage" />
+      <NavigationViewItem
+        Content="Dial"
+        Icon="Phone"
+        Tag="DialPage" />
+      <NavigationViewItem
+        Content="Stress"
+        Icon="AllApps"
+        Tag="StressPage" />
+    </NavigationView.MenuItems>
+    <Frame x:Name="MainFrame" />
+  </NavigationView>
 </Window>

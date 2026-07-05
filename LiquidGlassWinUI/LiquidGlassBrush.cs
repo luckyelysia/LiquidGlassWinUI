@@ -204,10 +204,24 @@ namespace LiquidGlassWinUI
         public float Dpr { get; set; }
 
         // ---- effect pipeline (built lazily when the brush attaches) ----
+        //
+        // FACTORY POOLING: CompositionEffectFactory registers animatable properties
+        // in the compositor's global tracking table. The compositor has a hard cap of
+        // 64 animatable properties aggregate across all factories. To avoid hitting
+        // this cap when pages are navigated (and brushes are disconnected/reconnected),
+        // factories are created ONCE, stored statically, and reused by every brush
+        // instance. Only the brushes themselves (created from the pooled factories)
+        // are per-instance and disposed in OnDisconnected.
+        private static CompositionEffectFactory s_hBlurFactory;
+        private static CompositionEffectFactory s_vBlurFactory;
+        private static CompositionEffectFactory s_glassFactory;
+        private static readonly object s_poolLock = new();
+
         private Compositor _compositor;
         private CompositionEffectBrush _glassBrush;
         private CompositionEffectBrush _hBlurBrush;   // separable blur (H pass)
         private CompositionEffectBrush _vBlurBrush;   // separable blur (V pass)
+        private CompositionBrush _rawBackdrop;        // raw backdrop source (tracked for disposal on toggle)
         private bool _blurBypassed;                   // true when BlurAmount <= 0 (blur chain disconnected)
 
         /// <summary>
@@ -234,32 +248,46 @@ namespace LiquidGlassWinUI
             {
                 _compositor = CompositionTarget.GetCompositorForCurrentThread();
 
-                // backdrop -> BlurH (1D separable H) -> BlurV (1D separable V)
-                // -> glass. Two 9-tap 1D passes replace the single-pass 2D
-                // GaussianBlurEffect: fewer total taps (18 vs 25), each shader is
-                // tiny (~20 ops each), and separable 1D passes avoid the frame-lag
-                // / desync issues of the built-in Win2D GaussianBlurEffect.
-                var hBlurEffect = new BlurHEffect().Create();
-                var hBlurFactory = _compositor.CreateEffectFactory(hBlurEffect,
-                    new List<string> { BlurHEffect.BlurAmountPropertyPath });
-                _hBlurBrush = hBlurFactory.CreateBrush();
+                // Get or create pooled factories (one-time init per process).
+                // Pooling avoids re-registering animatable properties with the
+                // compositor on every connect/disconnect cycle, which would
+                // otherwise exhaust the compositor-wide 64-property cap after
+                // ~3 page navigations (22 properties × 3 = 66 > 64).
+                CompositionEffectFactory hFactory, vFactory, gFactory;
+                lock (s_poolLock)
+                {
+                    if (s_hBlurFactory == null)
+                    {
+                        s_hBlurFactory = _compositor.CreateEffectFactory(
+                            new BlurHEffect().Create(),
+                            new List<string> { BlurHEffect.BlurAmountPropertyPath });
+
+                        s_vBlurFactory = _compositor.CreateEffectFactory(
+                            new BlurVEffect().Create(),
+                            new List<string> { BlurVEffect.BlurAmountPropertyPath });
+
+                        var glassEffect = new LiquidGlassEffect
+                        {
+                            Dpr = Dpr > 0 ? Dpr : MeasureDpr()
+                        }.Create();
+                        List<string> glassPaths = LiquidGlassEffect.Params
+                            .Select(p => LiquidGlassEffect.EffectNameValue + "." + p.Key)
+                            .ToList();
+                        s_glassFactory = _compositor.CreateEffectFactory(glassEffect, glassPaths);
+                    }
+                    hFactory = s_hBlurFactory;
+                    vFactory = s_vBlurFactory;
+                    gFactory = s_glassFactory;
+                }
+
+                // Create per-instance brushes from the pooled factories.
+                _hBlurBrush = hFactory.CreateBrush();
                 _hBlurBrush.SetSourceParameter("Backdrop", _compositor.CreateBackdropBrush());
 
-                var vBlurEffect = new BlurVEffect().Create();
-                var vBlurFactory = _compositor.CreateEffectFactory(vBlurEffect,
-                    new List<string> { BlurVEffect.BlurAmountPropertyPath });
-                _vBlurBrush = vBlurFactory.CreateBrush();
+                _vBlurBrush = vFactory.CreateBrush();
                 _vBlurBrush.SetSourceParameter("Backdrop", _hBlurBrush);
 
-                // blur -> glass. FlattenSource materializes the (blurred) source
-                // into the texture the glass sampler reads as texture0. Dpr is
-                // auto-measured (system DPI) unless overridden.
-                var glassEffect = new LiquidGlassEffect { Dpr = Dpr > 0 ? Dpr : MeasureDpr() }.Create();
-                List<string> glassPaths = LiquidGlassEffect.Params
-                    .Select(p => LiquidGlassEffect.EffectNameValue + "." + p.Key)
-                    .ToList();
-                var glassFactory = _compositor.CreateEffectFactory(glassEffect, glassPaths);
-                _glassBrush = glassFactory.CreateBrush();
+                _glassBrush = gFactory.CreateBrush();
 
                 // When BlurAmount is 0 at connect time, bypass the blur chain:
                 // connect the glass directly to the raw backdrop. When > 0, route
@@ -267,7 +295,8 @@ namespace LiquidGlassWinUI
                 if (BlurAmount <= 0)
                 {
                     _blurBypassed = true;
-                    _glassBrush.SetSourceParameter("Backdrop", _compositor.CreateBackdropBrush());
+                    _rawBackdrop = _compositor.CreateBackdropBrush();
+                    _glassBrush.SetSourceParameter("Backdrop", _rawBackdrop);
                 }
                 else
                 {
@@ -286,13 +315,11 @@ namespace LiquidGlassWinUI
             catch (Exception e)
             {
                 LastError = e.Message + "\n" + e.StackTrace;
-                
-                // Effect failed to compile/link (e.g. shader too complex for DWM):
-                // leave the brush transparent instead of crashing the app.
-                //CompositionBrush = null;
-                _glassBrush = null;
-                _hBlurBrush = null;
-                _vBlurBrush = null;
+
+                _hBlurBrush?.Dispose();
+                _vBlurBrush?.Dispose();
+                _rawBackdrop?.Dispose();
+                _glassBrush?.Dispose();
 
                 CompositionBrush = _compositor.CreateColorBrush(Colors.Red);
             }
@@ -304,12 +331,22 @@ namespace LiquidGlassWinUI
         /// </summary>
         protected override void OnDisconnected()
         {
+            // Dispose per-instance brushes. The factories are pooled statically
+            // and shared across all brush instances — they must NOT be disposed
+            // here or subsequent brush instances would fail to create brushes.
+            _hBlurBrush?.Dispose();
+            _vBlurBrush?.Dispose();
+            _rawBackdrop?.Dispose();
+
+            // CompositionBrush == _glassBrush; dispose once via the base property.
             CompositionBrush?.Dispose();
 
             CompositionBrush = null;
             _glassBrush = null;
             _hBlurBrush = null;
             _vBlurBrush = null;
+            _rawBackdrop = null;
+            _compositor = null;
         }
 
         private static void OnParamChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -334,8 +371,11 @@ namespace LiquidGlassWinUI
                 if (bypass != _blurBypassed && _glassBrush != null)
                 {
                     _blurBypassed = bypass;
+                    // Dispose the old backdrop source before replacing it.
+                    _rawBackdrop?.Dispose();
+                    _rawBackdrop = bypass ? _compositor.CreateBackdropBrush() : null;
                     _glassBrush.SetSourceParameter("Backdrop",
-                        bypass ? _compositor.CreateBackdropBrush() : _vBlurBrush);
+                        bypass ? _rawBackdrop : _vBlurBrush);
                     // SetSourceParameter resets animatable properties on a factory
                     // brush, so re-sync every glass parameter after the swap.
                     foreach (var kv in s_paramKeys)

@@ -20,10 +20,23 @@ public sealed partial class MainWindow : Window
         timer.Tick += Timer_Tick;
         timer.Start();
 
-        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        MainNavView.SelectionChanged += MainNavView_SelectionChanged;
+        MainNavView.SelectedItem = MainNavView.MenuItems[0];
+    }
+
+    private void MainNavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        if (args.SelectedItem is NavigationViewItem item && item.Tag is string tag)
         {
-            MainFrame.NavigateToType(typeof(DevPage), null, null);
-        });
+            var pageType = tag switch
+            {
+                "DevPage" => typeof(DevPage),
+                "DialPage" => typeof(DialPage),
+                "StressPage" => typeof(StressPage),
+                _ => typeof(DevPage),
+            };
+            MainFrame.NavigateToType(pageType, null, null);
+        }
     }
 
     private void Timer_Tick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
