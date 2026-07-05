@@ -166,13 +166,7 @@ Or open `LiquidGlassWinUI.slnx` in Visual Studio and build the whole solution.
 ### Install
 
 ```powershell
-# nuget.org
 dotnet add package LiquidGlassWinUI
-
-# GitHub Packages
-dotnet nuget add source https://nuget.pkg.github.com/luckyelysia/index.json `
-  --name github --username luckyelysia --password TOKEN --store-password-in-clear-text
-dotnet add package LiquidGlassWinUI --source github
 ```
 
 > **Project-reference consumers:** MSBuild does not transitively copy native DLLs
