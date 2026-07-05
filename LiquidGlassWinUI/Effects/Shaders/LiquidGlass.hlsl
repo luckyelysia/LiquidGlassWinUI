@@ -35,6 +35,7 @@
 // values read as logical px; the refraction magnitude is DPI-neutral on its own.
 
 #define PI 3.14159265359
+#define SHAPE_MARGIN 1.0       // px inset from brush edge; prevents clipping at AA boundary
 
 Texture2D texture0;
 SamplerState sampler0;
@@ -59,7 +60,7 @@ cbuffer LiquidGlassParams : register(b0)
     float TintG;               // offset 60
     float TintB;               // offset 64
     float TintA;               // offset 68
-    float ShadowExpand;        // offset 72  (unused; shadow drawn outside the brush)
+    float Magnification;       // offset 72  (backdrop zoom: 1.0 = none, >1 = zoom in; min 1 — <1 would sample void outside content rect)
     float ShadowFactor;        // offset 76  (unused)
     float ShadowPosX;          // offset 80  (unused)
     float ShadowPosY;          // offset 84  (unused)
@@ -152,6 +153,15 @@ float2 SmoothNormal(float2 fragCoord, float2 center, float2 halfPx, float tau)
     return float2((wr - wl) / w, (wt - wb) / w);
 }
 
+// Clamp a sampling UV to the content rect of the intermediate texture.
+// Extreme refraction + chromatic dispersion can push UVs beyond the valid
+// area; without this, DWM's hardware sampler clamps to the texture border,
+// producing visible smearing at glass edges (especially with BlurAmount=0).
+float2 ClampSamplingUv(float2 uv, float2 lo, float2 hi)
+{
+    return clamp(uv, lo, hi);
+}
+
 // FlattenSource — color-input passthrough for the flatten subgraph. With the
 // effect's flattenSourceBeforeCustomSampler flag on, DWM wraps the (composed)
 // source brush — here backdrop -> GaussianBlurEffect — in this passthrough to
@@ -177,7 +187,17 @@ float4 LiquidGlassBody(float2 uv, float4 samplerDataExt, float4 samplerData)
     float2 contentUvSize = hasContentRect ? contentUvSizeRaw : 1.0.xx;
     float2 localUv = hasContentRect ? ((uv - contentMin) / contentUvSize) : uv;
     //float2 localUv = uv / (float2(ddx(uv.x), ddy(uv.y)) * samplerDataExt.xy);
-   
+
+    // Bounds used to clamp every texture sample inside the valid content rect.
+    // When samplerData is degenerate fall back to [0,1] (the full intermediate).
+    float2 clampMin = hasContentRect ? contentMin : float2(0.0, 0.0);
+    float2 clampMax = hasContentRect ? contentMax : float2(1.0, 1.0);
+
+    // Magnification: scale UVs about the content center to zoom the backdrop.
+    // Magnification=1.0 is identity; >1 zooms in. Must stay ≥1 — <1 pushes UVs
+    // beyond the content rect, sampling void/clamped edges.
+    float2 contentCenter = (contentMin + contentMax) * 0.5;
+    float2 zoomedUv = contentCenter + (uv - contentCenter) / Magnification;
 
     float2 res = max(1.0 / max(abs(ddx(localUv)) + abs(ddy(localUv)), float2(1e-6, 1e-6)), 1.0);
     float dpr = (Dpr > 0.0) ? Dpr : 1.0;   // physical px per logical px (0/unset -> 1)
@@ -189,7 +209,10 @@ float4 LiquidGlassBody(float2 uv, float4 samplerDataExt, float4 samplerData)
     // corner-radius fraction of the shorter half-side (keep < 1 so flat sides
     // exist; =1 collapses to a pure superellipse -> aspect-corner bug for non-square).
     float2 center = res * 0.5;
-    float2 halfPx = res * 0.5;
+    // ShapeMargin const (SHAPE_MARGIN px, scaled by dpr) shrinks the glass inward
+    // so it does not clip against the brush edges. Clamped to never collapse.
+    float margin = max(SHAPE_MARGIN * dpr, 0.0);
+    float2 halfPx = max(res * 0.5 - margin, 1.0);
     float cr = min(halfPx.x, halfPx.y) * saturate(ShapeRadius);
     float n = clamp(ShapeRoundness, 2.0, 8.0);
 
@@ -288,7 +311,8 @@ float4 LiquidGlassBody(float2 uv, float4 samplerDataExt, float4 samplerData)
         for (int ti = 0; ti < 8; ti++)
         {
             float f = (float)ti / 7.0 - 0.5;
-            float4 tap = texture0.Sample(sampler0, uv + off + offSpread * f);
+            float2 sampleUv = ClampSamplingUv(zoomedUv + off + offSpread * f, clampMin, clampMax);
+            float4 tap = texture0.Sample(sampler0, sampleUv);
             accRgb += tap.rgb;
             accA   += tap.a;
         }
@@ -305,15 +329,15 @@ float4 LiquidGlassBody(float2 uv, float4 samplerDataExt, float4 samplerData)
             float nb = 1.0 - disp;
 
             // R channel (dispersed outward): 3-tap box blur
-            float rSum  = texture0.Sample(sampler0, uv + off * nr + offSpread * (-0.333)).r;
-                 rSum += texture0.Sample(sampler0, uv + off * nr).r;
-                 rSum += texture0.Sample(sampler0, uv + off * nr + offSpread *  0.333).r;
+            float rSum  = texture0.Sample(sampler0, ClampSamplingUv(zoomedUv + off * nr + offSpread * (-0.333), clampMin, clampMax)).r;
+                 rSum += texture0.Sample(sampler0, ClampSamplingUv(zoomedUv + off * nr, clampMin, clampMax)).r;
+                 rSum += texture0.Sample(sampler0, ClampSamplingUv(zoomedUv + off * nr + offSpread *  0.333, clampMin, clampMax)).r;
             blurredPixel.r = rSum / 3.0;
 
             // B channel (dispersed inward): 3-tap box blur
-            float bSum  = texture0.Sample(sampler0, uv + off * nb + offSpread * (-0.333)).b;
-                 bSum += texture0.Sample(sampler0, uv + off * nb).b;
-                 bSum += texture0.Sample(sampler0, uv + off * nb + offSpread *  0.333).b;
+            float bSum  = texture0.Sample(sampler0, ClampSamplingUv(zoomedUv + off * nb + offSpread * (-0.333), clampMin, clampMax)).b;
+                 bSum += texture0.Sample(sampler0, ClampSamplingUv(zoomedUv + off * nb, clampMin, clampMax)).b;
+                 bSum += texture0.Sample(sampler0, ClampSamplingUv(zoomedUv + off * nb + offSpread *  0.333, clampMin, clampMax)).b;
             blurredPixel.b = bSum / 3.0;
         }
         // Un-premultiply: the blurred backdrop is premultiplied alpha. Near

@@ -114,6 +114,11 @@ namespace LiquidGlassWinUI
         /// <summary>Strength multiplier applied to the Fresnel refraction term (default 20).</summary>
         public double RefFresnelFactor { get => (double)GetValue(RefFresnelFactorProperty); set => SetValue(RefFresnelFactorProperty, value); }
 
+        /// <summary>Backing dependency property for <see cref="Magnification"/>.</summary>
+        public static readonly DependencyProperty MagnificationProperty = RegisterGlassParam("Magnification");
+        /// <summary>Backdrop zoom factor centered on the glass: 1.0 = none, >1 = zoom in. Cannot go below 1 — sampling outside the backdrop content rect would read void.</summary>
+        public double Magnification { get => (double)GetValue(MagnificationProperty); set => SetValue(MagnificationProperty, value); }
+
         // ---- Glare ----
 
         /// <summary>Backing dependency property for <see cref="GlareRange"/>.</summary>
@@ -207,7 +212,7 @@ namespace LiquidGlassWinUI
         //
         // FACTORY POOLING: CompositionEffectFactory registers animatable properties
         // in the compositor's global tracking table. The compositor has a hard cap of
-        // 64 animatable properties aggregate across all factories. To avoid hitting
+        // 256 animatable properties aggregate across all factories. To avoid hitting
         // this cap when pages are navigated (and brushes are disconnected/reconnected),
         // factories are created ONCE, stored statically, and reused by every brush
         // instance. Only the brushes themselves (created from the pooled factories)
@@ -221,7 +226,7 @@ namespace LiquidGlassWinUI
         private CompositionEffectBrush _glassBrush;
         private CompositionEffectBrush _hBlurBrush;   // separable blur (H pass)
         private CompositionEffectBrush _vBlurBrush;   // separable blur (V pass)
-        private CompositionBrush _rawBackdrop;        // raw backdrop source (tracked for disposal on toggle)
+        private CompositionBrush _backdropBrush;        // raw backdrop source (tracked for disposal on toggle)
         private bool _blurBypassed;                   // true when BlurAmount <= 0 (blur chain disconnected)
 
         /// <summary>
@@ -248,11 +253,6 @@ namespace LiquidGlassWinUI
             {
                 _compositor = CompositionTarget.GetCompositorForCurrentThread();
 
-                // Get or create pooled factories (one-time init per process).
-                // Pooling avoids re-registering animatable properties with the
-                // compositor on every connect/disconnect cycle, which would
-                // otherwise exhaust the compositor-wide 64-property cap after
-                // ~3 page navigations (22 properties × 3 = 66 > 64).
                 CompositionEffectFactory hFactory, vFactory, gFactory;
                 lock (s_poolLock)
                 {
@@ -280,9 +280,10 @@ namespace LiquidGlassWinUI
                     gFactory = s_glassFactory;
                 }
 
+                _backdropBrush = _compositor.CreateBackdropBrush();
                 // Create per-instance brushes from the pooled factories.
                 _hBlurBrush = hFactory.CreateBrush();
-                _hBlurBrush.SetSourceParameter("Backdrop", _compositor.CreateBackdropBrush());
+                _hBlurBrush.SetSourceParameter("Backdrop", _backdropBrush);
 
                 _vBlurBrush = vFactory.CreateBrush();
                 _vBlurBrush.SetSourceParameter("Backdrop", _hBlurBrush);
@@ -295,8 +296,7 @@ namespace LiquidGlassWinUI
                 if (BlurAmount <= 0)
                 {
                     _blurBypassed = true;
-                    _rawBackdrop = _compositor.CreateBackdropBrush();
-                    _glassBrush.SetSourceParameter("Backdrop", _rawBackdrop);
+                    _glassBrush.SetSourceParameter("Backdrop", _backdropBrush);
                 }
                 else
                 {
@@ -318,7 +318,7 @@ namespace LiquidGlassWinUI
 
                 _hBlurBrush?.Dispose();
                 _vBlurBrush?.Dispose();
-                _rawBackdrop?.Dispose();
+                _backdropBrush?.Dispose();
                 _glassBrush?.Dispose();
 
                 CompositionBrush = _compositor.CreateColorBrush(Colors.Red);
@@ -336,7 +336,7 @@ namespace LiquidGlassWinUI
             // here or subsequent brush instances would fail to create brushes.
             _hBlurBrush?.Dispose();
             _vBlurBrush?.Dispose();
-            _rawBackdrop?.Dispose();
+            _backdropBrush?.Dispose();
 
             // CompositionBrush == _glassBrush; dispose once via the base property.
             CompositionBrush?.Dispose();
@@ -345,7 +345,7 @@ namespace LiquidGlassWinUI
             _glassBrush = null;
             _hBlurBrush = null;
             _vBlurBrush = null;
-            _rawBackdrop = null;
+            _backdropBrush = null;
             _compositor = null;
         }
 
@@ -372,10 +372,10 @@ namespace LiquidGlassWinUI
                 {
                     _blurBypassed = bypass;
                     // Dispose the old backdrop source before replacing it.
-                    _rawBackdrop?.Dispose();
-                    _rawBackdrop = bypass ? _compositor.CreateBackdropBrush() : null;
+                    _backdropBrush?.Dispose();
+                    _backdropBrush = bypass ? _compositor.CreateBackdropBrush() : null;
                     _glassBrush.SetSourceParameter("Backdrop",
-                        bypass ? _rawBackdrop : _vBlurBrush);
+                        bypass ? _backdropBrush : _vBlurBrush);
                     // SetSourceParameter resets animatable properties on a factory
                     // brush, so re-sync every glass parameter after the swap.
                     foreach (var kv in s_paramKeys)
@@ -394,6 +394,64 @@ namespace LiquidGlassWinUI
                 return;
             }
             _glassBrush?.Properties.InsertScalar(LiquidGlassEffect.EffectNameValue + "." + key, value);
+        }
+
+        /// <summary>
+        /// Animates a named scalar property using a compositor-thread
+        /// <see cref="Microsoft.UI.Composition.ScalarKeyFrameAnimation"/> with cubic
+        /// ease-out. Runs entirely on the compositor thread — no UI-thread timers.
+        /// </summary>
+        /// <param name="key">Parameter key (e.g. "TintA", "GlareAngle").</param>
+        /// <param name="to">Target value.</param>
+        /// <param name="durationMs">Animation duration in milliseconds.</param>
+        public void AnimateScalar(string key, float to, double durationMs)
+        {
+            if (_glassBrush == null || _compositor == null) return;
+
+            var fullPath = LiquidGlassEffect.EffectNameValue + "." + key;
+            var animation = _compositor.CreateScalarKeyFrameAnimation();
+            animation.Duration = TimeSpan.FromMilliseconds(durationMs);
+            animation.InsertKeyFrame(1.0f, to,
+                _compositor.CreateCubicBezierEasingFunction(
+                    new System.Numerics.Vector2(0.215f, 0.61f),   // ease-out cubic
+                    new System.Numerics.Vector2(0.355f, 1.0f)));
+
+            _glassBrush.Properties.StartAnimation(fullPath, animation);
+        }
+
+        /// <summary>
+        /// Animates every animatable material parameter toward the values stored in
+        /// <paramref name="target"/>. All animations are batched into a single
+        /// <see cref="CompositionCommitBatch"/> so they start on the same compositor
+        /// frame. <c>BlurAmount</c> is set directly (it lives on the H/V blur brushes,
+        /// not the glass cbuffer).
+        /// </summary>
+        /// <remarks>
+        /// The <paramref name="target"/> brush does not need to be connected — only its
+        /// <see cref="DependencyProperty"/> values are read.
+        /// </remarks>
+        public void TransitionTo(LiquidGlassBrush target, double durationMs)
+        {
+            if (_glassBrush == null || _compositor == null || target == null) return;
+
+            var batch = _compositor.GetCommitBatch(CompositionBatchTypes.Animation);
+
+            foreach (var (dp, key) in s_paramKeys)
+            {
+                var targetValue = (float)(double)target.GetValue(dp);
+
+                // BlurAmount drives the separable H/V blur passes, not the glass
+                // cbuffer. Set it directly so OnParamChanged → ApplyValue updates
+                // both blur brushes. Not animated, but it's 1 param out of 22.
+                if (key == "BlurAmount")
+                {
+                    SetValue(dp, (double)targetValue);
+                }
+                else
+                {
+                    AnimateScalar(key, targetValue, durationMs);
+                }
+            }
         }
 
         // System DPI (physical px per logical px). GetDpiForSystem needs no window

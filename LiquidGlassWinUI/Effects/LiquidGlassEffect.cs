@@ -45,6 +45,7 @@ namespace LiquidGlassWinUI.Effects
             new() { Key = "RefFresnelRange",     Offset = 12,  Default = 30,   Min = 0,    Max = 100,  Step = 0.01f, Group = "Refraction", Label = "Fresnel Range" },
             new() { Key = "RefFresnelHardness",  Offset = 16,  Default = 20,   Min = 0,    Max = 100,  Step = 0.01f, Group = "Refraction", Label = "Fresnel Hardness" },
             new() { Key = "RefFresnelFactor",    Offset = 20,  Default = 20,   Min = 0,    Max = 100,  Step = 0.01f, Group = "Refraction", Label = "Fresnel Factor" },
+            new() { Key = "Magnification",       Offset = 72,  Default = 1.0f, Min = 1.0f, Max = 3.0f, Step = 0.01f, Group = "Refraction", Label = "Magnification" },
             // Glare
             new() { Key = "GlareRange",          Offset = 24,  Default = 30,   Min = 0,    Max = 100,  Step = 0.01f, Group = "Glare", Label = "Glare Range" },
             new() { Key = "GlareHardness",       Offset = 28,  Default = 20,   Min = 0,    Max = 100,  Step = 0.01f, Group = "Glare", Label = "Glare Hardness" },

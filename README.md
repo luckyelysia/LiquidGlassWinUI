@@ -47,7 +47,7 @@ Solution: `LiquidGlassWinUI.slnx` (requires Visual Studio 2022+ or `dotnet` CLI 
 
 ## LiquidGlassBrush — public API
 
-The brush exposes every material parameter as a `DependencyProperty`. All 19 parameters bind and animate from XAML with no code-behind.
+The brush exposes every material parameter as a `DependencyProperty`. All 20 parameters bind and animate from XAML with no code-behind.
 
 ### Refraction
 
@@ -60,6 +60,7 @@ The brush exposes every material parameter as a `DependencyProperty`. All 19 par
 | `RefFresnelRange` | 30 | 0–100 | Width of the Fresnel refraction band near grazing angles |
 | `RefFresnelHardness` | 20 | 0–100 | Falloff sharpness of the Fresnel band |
 | `RefFresnelFactor` | 20 | 0–100 | Strength multiplier for the Fresnel rim |
+| `Magnification` | 1.0 | 1–3 | Backdrop zoom factor (1.0 = none, >1 = zoom in; cannot go below 1) |
 
 ### Glare
 

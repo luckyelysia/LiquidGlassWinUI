@@ -44,7 +44,7 @@ xmlns:lg="using:LiquidGlassWinUI"
 
 ## LiquidGlassBrush 公共 API
 
-所有材质参数均暴露为 `DependencyProperty`。全部 19 个参数均可从 XAML 直接绑定和动画化，无需代码后置。
+所有材质参数均暴露为 `DependencyProperty`。全部 20 个参数均可从 XAML 直接绑定和动画化，无需代码后置。
 
 ### 折射 (Refraction)
 
@@ -57,6 +57,7 @@ xmlns:lg="using:LiquidGlassWinUI"
 | `RefFresnelRange` | 30 | 0–100 | 掠射角附近的菲涅耳折射带宽度 |
 | `RefFresnelHardness` | 20 | 0–100 | 菲涅耳带衰减锐度 |
 | `RefFresnelFactor` | 20 | 0–100 | 菲涅耳边缘光强度系数 |
+| `Magnification` | 1.0 | 1–3 | 玻璃背后的 backdrop 放大倍率（1.0 = 无放大，>1 = 放大，不可小于 1） |
 
 ### 高光 (Glare)
 

@@ -33,6 +33,7 @@ public sealed partial class MainWindow : Window
                 "DevPage" => typeof(DevPage),
                 "DialPage" => typeof(DialPage),
                 "StressPage" => typeof(StressPage),
+                "TabBarPage" => typeof(TabBarPage),
                 _ => typeof(DevPage),
             };
             MainFrame.NavigateToType(pageType, null, null);

@@ -32,6 +32,10 @@
         Content="Stress"
         Icon="AllApps"
         Tag="StressPage" />
+      <NavigationViewItem
+        Content="TabBar"
+        Icon="DockBottom"
+        Tag="TabBarPage" />
     </NavigationView.MenuItems>
     <Frame x:Name="MainFrame" />
   </NavigationView>
