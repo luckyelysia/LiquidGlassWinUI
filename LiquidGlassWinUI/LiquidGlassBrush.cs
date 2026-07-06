@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using LiquidGlassWinUI.Effects;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
@@ -26,9 +25,8 @@ namespace LiquidGlassWinUI
     /// </para>
     /// <para>
     /// The glass effect has <c>FlattenSource</c> enabled, so DWM materializes the
-    /// backdrop into a real texture the glass sampler reads. The DPI the glass
-    /// scales its bands by is auto-measured from the system DPI when the brush
-    /// connects (see <see cref="Dpr"/>), so no code-behind is required.
+    /// backdrop into a real texture the glass sampler reads. All material parameters
+    /// are in logical pixels (the glass is DPI-agnostic), so no code-behind is required.
     /// </para>
     /// <para>
     /// If the effect fails to compile/link (for example, if the shader is too complex
@@ -56,200 +54,454 @@ namespace LiquidGlassWinUI
     /// </remarks>
     public sealed class LiquidGlassBrush : XamlCompositionBrushBase
     {
-        // Maps each parameter's DependencyProperty to its KEY (also the effect property
-        // name). The full animatable path is <EffectName>.<key>.
-        private static readonly Dictionary<DependencyProperty, string> s_paramKeys = new();
-
-        // Post-processing parameter keys — routed to PostProcessingEffect instead of the glass brush.
-        private static readonly HashSet<string> s_postProcessKeys = new()
-        {
-            "BloomAmount", "Brightness", "Contrast", "Saturation",
-            "Temperature", "Exposure", "Vibrance",
-        };
-
-        private static DependencyProperty RegisterParam(string key, double defaultValue)
-        {
-            var dp = DependencyProperty.Register(key, typeof(double), typeof(LiquidGlassBrush),
-                new PropertyMetadata(defaultValue, OnParamChanged));
-            s_paramKeys[dp] = key;
-            return dp;
-        }
-
-        // Glass parameter: default comes from LiquidGlassEffect.Params (single source of truth).
-        private static DependencyProperty RegisterGlassParam(string key)
-        {
-            float defaultVal = LiquidGlassEffect.Params.First(p => p.Key == key).Default;
-            return RegisterParam(key, defaultVal);
-        }
+        /// <summary>
+        /// Which effect brush a parameter is routed to: the glass cbuffer or the
+        /// post-processing effect (bloom + colour adjustments). <see cref="BlurAmount"/>
+        /// is handled separately — it drives the H/V blur passes and toggles bypass,
+        /// so it never goes through <see cref="ApplyParam"/>.
+        /// </summary>
+        private enum ParamTarget { Glass, PostProcess }
 
         // ---- dependency properties: one per material parameter ----
 
         // ---- Refraction ----
 
         /// <summary>Backing dependency property for <see cref="RefThickness"/>.</summary>
-        public static readonly DependencyProperty RefThicknessProperty = RegisterGlassParam("RefThickness");
+        public static readonly DependencyProperty RefThicknessProperty =
+            DependencyProperty.Register(
+                nameof(RefThickness), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "RefThickness").Default,
+                    OnRefThicknessChanged));
         /// <summary>Refraction edge thickness, in logical pixels (default 20).</summary>
         public double RefThickness { get => (double)GetValue(RefThicknessProperty); set => SetValue(RefThicknessProperty, value); }
+        private static void OnRefThicknessChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".RefThickness",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="RefFactor"/>.</summary>
-        public static readonly DependencyProperty RefFactorProperty = RegisterGlassParam("RefFactor");
+        public static readonly DependencyProperty RefFactorProperty =
+            DependencyProperty.Register(
+                nameof(RefFactor), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "RefFactor").Default,
+                    OnRefFactorChanged));
         /// <summary>Index of refraction driving how strongly the backdrop is bent (default 1.4).</summary>
         public double RefFactor { get => (double)GetValue(RefFactorProperty); set => SetValue(RefFactorProperty, value); }
+        private static void OnRefFactorChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".RefFactor",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="RefDispersion"/>.</summary>
-        public static readonly DependencyProperty RefDispersionProperty = RegisterGlassParam("RefDispersion");
+        public static readonly DependencyProperty RefDispersionProperty =
+            DependencyProperty.Register(
+                nameof(RefDispersion), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "RefDispersion").Default,
+                    OnRefDispersionChanged));
         /// <summary>Chromatic dispersion spreading the refraction by wavelength (default 7).</summary>
         public double RefDispersion { get => (double)GetValue(RefDispersionProperty); set => SetValue(RefDispersionProperty, value); }
+        private static void OnRefDispersionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".RefDispersion",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="DispersionRange"/>.</summary>
-        public static readonly DependencyProperty DispersionRangeProperty = RegisterGlassParam("DispersionRange");
+        public static readonly DependencyProperty DispersionRangeProperty =
+            DependencyProperty.Register(
+                nameof(DispersionRange), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "DispersionRange").Default,
+                    OnDispersionRangeChanged));
         /// <summary>Scales chromatic dispersion: 0 = no dispersion (single UV sample), 1 = full (default 1.0).</summary>
         public double DispersionRange { get => (double)GetValue(DispersionRangeProperty); set => SetValue(DispersionRangeProperty, value); }
+        private static void OnDispersionRangeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".DispersionRange",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="RefFresnelRange"/>.</summary>
-        public static readonly DependencyProperty RefFresnelRangeProperty = RegisterGlassParam("RefFresnelRange");
+        public static readonly DependencyProperty RefFresnelRangeProperty =
+            DependencyProperty.Register(
+                nameof(RefFresnelRange), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "RefFresnelRange").Default,
+                    OnRefFresnelRangeChanged));
         /// <summary>Width of the Fresnel refraction band near grazing angles (default 30).</summary>
         public double RefFresnelRange { get => (double)GetValue(RefFresnelRangeProperty); set => SetValue(RefFresnelRangeProperty, value); }
+        private static void OnRefFresnelRangeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".RefFresnelRange",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="RefFresnelHardness"/>.</summary>
-        public static readonly DependencyProperty RefFresnelHardnessProperty = RegisterGlassParam("RefFresnelHardness");
+        public static readonly DependencyProperty RefFresnelHardnessProperty =
+            DependencyProperty.Register(
+                nameof(RefFresnelHardness), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "RefFresnelHardness").Default,
+                    OnRefFresnelHardnessChanged));
         /// <summary>Hardness (sharpness) of the Fresnel refraction band falloff (default 20).</summary>
         public double RefFresnelHardness { get => (double)GetValue(RefFresnelHardnessProperty); set => SetValue(RefFresnelHardnessProperty, value); }
+        private static void OnRefFresnelHardnessChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".RefFresnelHardness",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="RefFresnelFactor"/>.</summary>
-        public static readonly DependencyProperty RefFresnelFactorProperty = RegisterGlassParam("RefFresnelFactor");
+        public static readonly DependencyProperty RefFresnelFactorProperty =
+            DependencyProperty.Register(
+                nameof(RefFresnelFactor), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "RefFresnelFactor").Default,
+                    OnRefFresnelFactorChanged));
         /// <summary>Strength multiplier applied to the Fresnel refraction term (default 20).</summary>
         public double RefFresnelFactor { get => (double)GetValue(RefFresnelFactorProperty); set => SetValue(RefFresnelFactorProperty, value); }
+        private static void OnRefFresnelFactorChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".RefFresnelFactor",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="Magnification"/>.</summary>
-        public static readonly DependencyProperty MagnificationProperty = RegisterGlassParam("Magnification");
+        public static readonly DependencyProperty MagnificationProperty =
+            DependencyProperty.Register(
+                nameof(Magnification), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "Magnification").Default,
+                    OnMagnificationChanged));
         /// <summary>Backdrop zoom factor centered on the glass: 1.0 = none, >1 = zoom in. Cannot go below 1 — sampling outside the backdrop content rect would read void.</summary>
         public double Magnification { get => (double)GetValue(MagnificationProperty); set => SetValue(MagnificationProperty, value); }
+        private static void OnMagnificationChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".Magnification",
+                (float)(double)e.NewValue);
 
         // ---- Glare ----
 
         /// <summary>Backing dependency property for <see cref="GlareRange"/>.</summary>
-        public static readonly DependencyProperty GlareRangeProperty = RegisterGlassParam("GlareRange");
+        public static readonly DependencyProperty GlareRangeProperty =
+            DependencyProperty.Register(
+                nameof(GlareRange), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "GlareRange").Default,
+                    OnGlareRangeChanged));
         /// <summary>Angular width of the specular glare streak (default 30).</summary>
         public double GlareRange { get => (double)GetValue(GlareRangeProperty); set => SetValue(GlareRangeProperty, value); }
+        private static void OnGlareRangeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".GlareRange",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="GlareHardness"/>.</summary>
-        public static readonly DependencyProperty GlareHardnessProperty = RegisterGlassParam("GlareHardness");
+        public static readonly DependencyProperty GlareHardnessProperty =
+            DependencyProperty.Register(
+                nameof(GlareHardness), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "GlareHardness").Default,
+                    OnGlareHardnessChanged));
         /// <summary>Hardness (sharpness) of the glare streak falloff (default 20).</summary>
         public double GlareHardness { get => (double)GetValue(GlareHardnessProperty); set => SetValue(GlareHardnessProperty, value); }
+        private static void OnGlareHardnessChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".GlareHardness",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="GlareFactor"/>.</summary>
-        public static readonly DependencyProperty GlareFactorProperty = RegisterGlassParam("GlareFactor");
+        public static readonly DependencyProperty GlareFactorProperty =
+            DependencyProperty.Register(
+                nameof(GlareFactor), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "GlareFactor").Default,
+                    OnGlareFactorChanged));
         /// <summary>Intensity of the glare highlight (default 90).</summary>
         public double GlareFactor { get => (double)GetValue(GlareFactorProperty); set => SetValue(GlareFactorProperty, value); }
+        private static void OnGlareFactorChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".GlareFactor",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="GlareConvergence"/>.</summary>
-        public static readonly DependencyProperty GlareConvergenceProperty = RegisterGlassParam("GlareConvergence");
+        public static readonly DependencyProperty GlareConvergenceProperty =
+            DependencyProperty.Register(
+                nameof(GlareConvergence), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "GlareConvergence").Default,
+                    OnGlareConvergenceChanged));
         /// <summary>How tightly the glare converges toward its center (default 50).</summary>
         public double GlareConvergence { get => (double)GetValue(GlareConvergenceProperty); set => SetValue(GlareConvergenceProperty, value); }
+        private static void OnGlareConvergenceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".GlareConvergence",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="GlareOppositeFactor"/>.</summary>
-        public static readonly DependencyProperty GlareOppositeFactorProperty = RegisterGlassParam("GlareOppositeFactor");
+        public static readonly DependencyProperty GlareOppositeFactorProperty =
+            DependencyProperty.Register(
+                nameof(GlareOppositeFactor), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "GlareOppositeFactor").Default,
+                    OnGlareOppositeFactorChanged));
         /// <summary>Intensity of the secondary, opposite-facing glare highlight (default 80).</summary>
         public double GlareOppositeFactor { get => (double)GetValue(GlareOppositeFactorProperty); set => SetValue(GlareOppositeFactorProperty, value); }
+        private static void OnGlareOppositeFactorChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".GlareOppositeFactor",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="GlareAngle"/>.</summary>
-        public static readonly DependencyProperty GlareAngleProperty = RegisterGlassParam("GlareAngle");
+        public static readonly DependencyProperty GlareAngleProperty =
+            DependencyProperty.Register(
+                nameof(GlareAngle), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "GlareAngle").Default,
+                    OnGlareAngleChanged));
         /// <summary>Direction of the glare streak, in degrees (default -45).</summary>
         public double GlareAngle { get => (double)GetValue(GlareAngleProperty); set => SetValue(GlareAngleProperty, value); }
+        private static void OnGlareAngleChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".GlareAngle",
+                (float)(double)e.NewValue);
 
-        // ---- Blur ----
+        // ---- Blur (special: drives the H/V separable blur passes, not a cbuffer slot) ----
 
         /// <summary>Backing dependency property for <see cref="BlurAmount"/>.</summary>
-        public static readonly DependencyProperty BlurAmountProperty = RegisterParam("BlurAmount", 1.0);
+        public static readonly DependencyProperty BlurAmountProperty =
+            DependencyProperty.Register(
+                nameof(BlurAmount), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(1.0, OnBlurAmountChanged));
         /// <summary>
         /// Backdrop blur radius in pixels (default 1). Drives the separable H/V 1D
-        /// blur passes upstream of the glass.
+        /// blur passes upstream of the glass. At ≤ 0 the blur chain is bypassed.
         /// </summary>
         public double BlurAmount { get => (double)GetValue(BlurAmountProperty); set => SetValue(BlurAmountProperty, value); }
+        private static void OnBlurAmountChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyBlurAmount((float)(double)e.NewValue);
 
         // ---- Tint ----
 
         /// <summary>Backing dependency property for <see cref="TintR"/>.</summary>
-        public static readonly DependencyProperty TintRProperty = RegisterGlassParam("TintR");
+        public static readonly DependencyProperty TintRProperty =
+            DependencyProperty.Register(
+                nameof(TintR), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "TintR").Default,
+                    OnTintRChanged));
         /// <summary>Red channel of the glass tint, 0–255 (default 255).</summary>
         public double TintR { get => (double)GetValue(TintRProperty); set => SetValue(TintRProperty, value); }
+        private static void OnTintRChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".TintR",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="TintG"/>.</summary>
-        public static readonly DependencyProperty TintGProperty = RegisterGlassParam("TintG");
+        public static readonly DependencyProperty TintGProperty =
+            DependencyProperty.Register(
+                nameof(TintG), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "TintG").Default,
+                    OnTintGChanged));
         /// <summary>Green channel of the glass tint, 0–255 (default 255).</summary>
         public double TintG { get => (double)GetValue(TintGProperty); set => SetValue(TintGProperty, value); }
+        private static void OnTintGChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".TintG",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="TintB"/>.</summary>
-        public static readonly DependencyProperty TintBProperty = RegisterGlassParam("TintB");
+        public static readonly DependencyProperty TintBProperty =
+            DependencyProperty.Register(
+                nameof(TintB), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "TintB").Default,
+                    OnTintBChanged));
         /// <summary>Blue channel of the glass tint, 0–255 (default 255).</summary>
         public double TintB { get => (double)GetValue(TintBProperty); set => SetValue(TintBProperty, value); }
+        private static void OnTintBChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".TintB",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="TintA"/>.</summary>
-        public static readonly DependencyProperty TintAProperty = RegisterGlassParam("TintA");
+        public static readonly DependencyProperty TintAProperty =
+            DependencyProperty.Register(
+                nameof(TintA), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "TintA").Default,
+                    OnTintAChanged));
         /// <summary>Alpha (opacity) of the glass tint, 0–1 (default 0 = untinted).</summary>
         public double TintA { get => (double)GetValue(TintAProperty); set => SetValue(TintAProperty, value); }
+        private static void OnTintAChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".TintA",
+                (float)(double)e.NewValue);
 
         // Exposure moved to PostProcessingEffect.
 
         // ---- Bloom (PostProcessingEffect) ----
 
         /// <summary>Backing dependency property for <see cref="BloomAmount"/>.</summary>
-        public static readonly DependencyProperty BloomAmountProperty = RegisterParam("BloomAmount", 0.0);
+        public static readonly DependencyProperty BloomAmountProperty =
+            DependencyProperty.Register(
+                nameof(BloomAmount), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(1.0, OnBloomAmountChanged));
         /// <summary>Cross-fade between blurred and raw backdrop: 0 = pure blurred glass (default), 1 = fully sharp.</summary>
         public double BloomAmount { get => (double)GetValue(BloomAmountProperty); set => SetValue(BloomAmountProperty, value); }
+        private static void OnBloomAmountChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.PostProcess, PostProcessingEffect.BloomAmountPropertyPath,
+                (float)(double)e.NewValue);
 
         // ---- Colour Adjustments (PostProcessingEffect) ----
 
         /// <summary>Backing dependency property for <see cref="Brightness"/>.</summary>
-        public static readonly DependencyProperty BrightnessProperty = RegisterParam("Brightness", 0.0);
+        public static readonly DependencyProperty BrightnessProperty =
+            DependencyProperty.Register(
+                nameof(Brightness), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(0.0, OnBrightnessChanged));
         /// <summary>Additive brightness: -1 = fully dark, 0 = unchanged, +1 = fully bright.</summary>
         public double Brightness { get => (double)GetValue(BrightnessProperty); set => SetValue(BrightnessProperty, value); }
+        private static void OnBrightnessChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.PostProcess, PostProcessingEffect.BrightnessPropertyPath,
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="Contrast"/>.</summary>
-        public static readonly DependencyProperty ContrastProperty = RegisterParam("Contrast", 1.0);
+        public static readonly DependencyProperty ContrastProperty =
+            DependencyProperty.Register(
+                nameof(Contrast), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(1.0, OnContrastChanged));
         /// <summary>Contrast multiplier around mid-grey: 0 = flat grey, 1 = unchanged, 2 = doubled.</summary>
         public double Contrast { get => (double)GetValue(ContrastProperty); set => SetValue(ContrastProperty, value); }
+        private static void OnContrastChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.PostProcess, PostProcessingEffect.ContrastPropertyPath,
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="Saturation"/>.</summary>
-        public static readonly DependencyProperty SaturationProperty = RegisterParam("Saturation", 1.0);
+        public static readonly DependencyProperty SaturationProperty =
+            DependencyProperty.Register(
+                nameof(Saturation), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(1.0, OnSaturationChanged));
         /// <summary>Saturation multiplier: 0 = greyscale, 1 = unchanged, 2 = oversaturated.</summary>
         public double Saturation { get => (double)GetValue(SaturationProperty); set => SetValue(SaturationProperty, value); }
+        private static void OnSaturationChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.PostProcess, PostProcessingEffect.SaturationPropertyPath,
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="Temperature"/>.</summary>
-        public static readonly DependencyProperty TemperatureProperty = RegisterParam("Temperature", 0.0);
+        public static readonly DependencyProperty TemperatureProperty =
+            DependencyProperty.Register(
+                nameof(Temperature), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(0.0, OnTemperatureChanged));
         /// <summary>Colour temperature shift: -1 = cool (blue), 0 = unchanged, +1 = warm (yellow/red).</summary>
         public double Temperature { get => (double)GetValue(TemperatureProperty); set => SetValue(TemperatureProperty, value); }
+        private static void OnTemperatureChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.PostProcess, PostProcessingEffect.TemperaturePropertyPath,
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="Exposure"/> (PostProcessingEffect).</summary>
-        public static readonly DependencyProperty ExposureProperty = RegisterParam("Exposure", 1.0);
+        public static readonly DependencyProperty ExposureProperty =
+            DependencyProperty.Register(
+                nameof(Exposure), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(1.0, OnExposureChanged));
         /// <summary>Exposure gain: 0.5 = half brightness, 1 = unchanged, 2 = double brightness.</summary>
         public double Exposure { get => (double)GetValue(ExposureProperty); set => SetValue(ExposureProperty, value); }
+        private static void OnExposureChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.PostProcess, PostProcessingEffect.ExposurePropertyPath,
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="Vibrance"/>.</summary>
-        public static readonly DependencyProperty VibranceProperty = RegisterParam("Vibrance", 0.0);
+        public static readonly DependencyProperty VibranceProperty =
+            DependencyProperty.Register(
+                nameof(Vibrance), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(0.0, OnVibranceChanged));
         /// <summary>Smart vibrance boost targeting low-saturation regions: 0 = off, 1 = full.</summary>
         public double Vibrance { get => (double)GetValue(VibranceProperty); set => SetValue(VibranceProperty, value); }
+        private static void OnVibranceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.PostProcess, PostProcessingEffect.VibrancePropertyPath,
+                (float)(double)e.NewValue);
 
         // ---- Shape ----
 
         /// <summary>Backing dependency property for <see cref="ShapeRadius"/>.</summary>
-        public static readonly DependencyProperty ShapeRadiusProperty = RegisterGlassParam("ShapeRadius");
+        public static readonly DependencyProperty ShapeRadiusProperty =
+            DependencyProperty.Register(
+                nameof(ShapeRadius), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "ShapeRadius").Default,
+                    OnShapeRadiusChanged));
         /// <summary>Corner radius as a 0–1 fraction of the shorter half-side (default 0.4).</summary>
         public double ShapeRadius { get => (double)GetValue(ShapeRadiusProperty); set => SetValue(ShapeRadiusProperty, value); }
+        private static void OnShapeRadiusChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".ShapeRadius",
+                (float)(double)e.NewValue);
 
         /// <summary>Backing dependency property for <see cref="ShapeRoundness"/>.</summary>
-        public static readonly DependencyProperty ShapeRoundnessProperty = RegisterGlassParam("ShapeRoundness");
+        public static readonly DependencyProperty ShapeRoundnessProperty =
+            DependencyProperty.Register(
+                nameof(ShapeRoundness), typeof(double), typeof(LiquidGlassBrush),
+                new PropertyMetadata(
+                    (double)LiquidGlassEffect.Params.First(p => p.Key == "ShapeRoundness").Default,
+                    OnShapeRoundnessChanged));
         /// <summary>Superellipse roundness exponent n (default 5).</summary>
         public double ShapeRoundness { get => (double)GetValue(ShapeRoundnessProperty); set => SetValue(ShapeRoundnessProperty, value); }
+        private static void OnShapeRoundnessChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+            => ((LiquidGlassBrush)d).ApplyParam(
+                ParamTarget.Glass, LiquidGlassEffect.EffectNameValue + ".ShapeRoundness",
+                (float)(double)e.NewValue);
 
-        /// <summary>
-        /// Optional DPI override (physical px per logical px). Leave at 0 (the
-        /// default) to auto-measure from the system DPI when the brush connects, so
-        /// the brush is fully usable from XAML with no code-behind. If set to a value
-        /// greater than 0, that value is used as-is.
-        /// </summary>
-        public float Dpr { get; set; }
+        // ---- parameter registry ----
+        //
+        // Every routine parameter (glass cbuffer + post-processing) in one place, each
+        // with its full animatable path (effect prefix already baked in via const
+        // concatenation / the effect's own *PropertyPath constants, so there is no
+        // runtime string concatenation). Used to push initial values in OnConnected,
+        // to animate them in TransitionTo, and to look up by key in AnimateScalar.
+        //
+        // BlurAmount is deliberately ABSENT: it targets the H/V blur brushes and toggles
+        // bypass, so it is routed through ApplyBlurAmount, never ApplyParam.
+        private static readonly (DependencyProperty dp, ParamTarget target, string key, string path)[] s_params =
+        {
+            // ---- Refraction ----
+            (RefThicknessProperty,        ParamTarget.Glass,       "RefThickness",        LiquidGlassEffect.EffectNameValue + ".RefThickness"),
+            (RefFactorProperty,           ParamTarget.Glass,       "RefFactor",           LiquidGlassEffect.EffectNameValue + ".RefFactor"),
+            (RefDispersionProperty,       ParamTarget.Glass,       "RefDispersion",       LiquidGlassEffect.EffectNameValue + ".RefDispersion"),
+            (DispersionRangeProperty,     ParamTarget.Glass,       "DispersionRange",     LiquidGlassEffect.EffectNameValue + ".DispersionRange"),
+            (RefFresnelRangeProperty,     ParamTarget.Glass,       "RefFresnelRange",     LiquidGlassEffect.EffectNameValue + ".RefFresnelRange"),
+            (RefFresnelHardnessProperty,  ParamTarget.Glass,       "RefFresnelHardness",  LiquidGlassEffect.EffectNameValue + ".RefFresnelHardness"),
+            (RefFresnelFactorProperty,    ParamTarget.Glass,       "RefFresnelFactor",    LiquidGlassEffect.EffectNameValue + ".RefFresnelFactor"),
+            (MagnificationProperty,       ParamTarget.Glass,       "Magnification",       LiquidGlassEffect.EffectNameValue + ".Magnification"),
+            // ---- Glare ----
+            (GlareRangeProperty,          ParamTarget.Glass,       "GlareRange",          LiquidGlassEffect.EffectNameValue + ".GlareRange"),
+            (GlareHardnessProperty,       ParamTarget.Glass,       "GlareHardness",       LiquidGlassEffect.EffectNameValue + ".GlareHardness"),
+            (GlareFactorProperty,         ParamTarget.Glass,       "GlareFactor",         LiquidGlassEffect.EffectNameValue + ".GlareFactor"),
+            (GlareConvergenceProperty,    ParamTarget.Glass,       "GlareConvergence",    LiquidGlassEffect.EffectNameValue + ".GlareConvergence"),
+            (GlareOppositeFactorProperty, ParamTarget.Glass,       "GlareOppositeFactor", LiquidGlassEffect.EffectNameValue + ".GlareOppositeFactor"),
+            (GlareAngleProperty,          ParamTarget.Glass,       "GlareAngle",          LiquidGlassEffect.EffectNameValue + ".GlareAngle"),
+            // ---- Tint ----
+            (TintRProperty,               ParamTarget.Glass,       "TintR",               LiquidGlassEffect.EffectNameValue + ".TintR"),
+            (TintGProperty,               ParamTarget.Glass,       "TintG",               LiquidGlassEffect.EffectNameValue + ".TintG"),
+            (TintBProperty,               ParamTarget.Glass,       "TintB",               LiquidGlassEffect.EffectNameValue + ".TintB"),
+            (TintAProperty,               ParamTarget.Glass,       "TintA",               LiquidGlassEffect.EffectNameValue + ".TintA"),
+            // ---- Bloom + Colour Adjustments (PostProcessingEffect) ----
+            (BloomAmountProperty,         ParamTarget.PostProcess, "BloomAmount",         PostProcessingEffect.BloomAmountPropertyPath),
+            (BrightnessProperty,          ParamTarget.PostProcess, "Brightness",          PostProcessingEffect.BrightnessPropertyPath),
+            (ContrastProperty,            ParamTarget.PostProcess, "Contrast",            PostProcessingEffect.ContrastPropertyPath),
+            (SaturationProperty,          ParamTarget.PostProcess, "Saturation",          PostProcessingEffect.SaturationPropertyPath),
+            (TemperatureProperty,         ParamTarget.PostProcess, "Temperature",         PostProcessingEffect.TemperaturePropertyPath),
+            (ExposureProperty,            ParamTarget.PostProcess, "Exposure",            PostProcessingEffect.ExposurePropertyPath),
+            (VibranceProperty,            ParamTarget.PostProcess, "Vibrance",            PostProcessingEffect.VibrancePropertyPath),
+            // ---- Shape ----
+            (ShapeRadiusProperty,         ParamTarget.Glass,       "ShapeRadius",         LiquidGlassEffect.EffectNameValue + ".ShapeRadius"),
+            (ShapeRoundnessProperty,      ParamTarget.Glass,       "ShapeRoundness",      LiquidGlassEffect.EffectNameValue + ".ShapeRoundness"),
+        };
 
         // ---- effect pipeline (built lazily when the brush attaches) ----
         //
@@ -311,10 +563,7 @@ namespace LiquidGlassWinUI
                             new BlurVEffect().Create(),
                             new List<string> { BlurVEffect.BlurAmountPropertyPath });
 
-                        var glassEffect = new LiquidGlassEffect
-                        {
-                            Dpr = Dpr > 0 ? Dpr : MeasureDpr()
-                        }.Create();
+                        var glassEffect = new LiquidGlassEffect().Create();
                         List<string> glassPaths = LiquidGlassEffect.Params
                             .Select(p => LiquidGlassEffect.EffectNameValue + "." + p.Key)
                             .ToList();
@@ -356,21 +605,25 @@ namespace LiquidGlassWinUI
                 // When BlurAmount is 0 at connect time, both bloom sources see
                 // the raw backdrop (lerp(raw, raw, B) == raw — identity). When
                 // > 0, the bloom blends the blurred and raw backdrops.
-                if (BlurAmount <= 0)
+                _blurBypassed = BlurAmount <= 0;
+                _postProcessBrush.SetSourceParameter("Backdrop",
+                    _blurBypassed ? _backdropBrush : _vBlurBrush);
+
+                // Push every routine parameter's current value (DPs may have been set
+                // before the brush connected). After this, the per-property changed
+                // callbacks keep them in sync. BlurAmount is pushed separately below.
+                foreach (var (dp, target, _, path) in s_params)
                 {
-                    _blurBypassed = true;
-                    _postProcessBrush.SetSourceParameter("Backdrop", _backdropBrush);
-                }
-                else
-                {
-                    _postProcessBrush.SetSourceParameter("Backdrop", _vBlurBrush);
+                    ApplyParam(target, path, (float)(double)GetValue(dp));
                 }
 
-                // Push every parameter's current value (DPs may have been set before
-                // the brush connected). After this, OnParamChanged keeps them in sync.
-                foreach (var pair in s_paramKeys)
+                // BlurAmount drives the H/V blur brushes (not a cbuffer slot). The
+                // bypass source was already wired above, so only the scalar needs pushing.
+                if (!_blurBypassed)
                 {
-                    ApplyValue(pair.Value, (float)(double)GetValue(pair.Key));
+                    float blur = (float)BlurAmount;
+                    _hBlurBrush.Properties.InsertScalar(BlurHEffect.BlurAmountPropertyPath, blur);
+                    _vBlurBrush.Properties.InsertScalar(BlurVEffect.BlurAmountPropertyPath, blur);
                 }
 
                 CompositionBrush = _glassBrush;
@@ -415,69 +668,40 @@ namespace LiquidGlassWinUI
             _compositor = null;
         }
 
-        private static void OnParamChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        // Write one routine parameter to its effect brush. No-op until the pipeline
+        // is connected; OnConnected applies all values at once.
+        private void ApplyParam(ParamTarget target, string path, float value)
         {
-            var brush = (LiquidGlassBrush)d;
-            if (s_paramKeys.TryGetValue(e.Property, out string key))
-            {
-                brush.ApplyValue(key, (float)(double)e.NewValue);
-            }
+            CompositionEffectBrush brush = target == ParamTarget.PostProcess
+                ? _postProcessBrush : _glassBrush;
+            brush?.Properties.InsertScalar(path, value);
         }
 
-        // Route one parameter to the right effect brush. Post-processing params
-        // (bloom + colour adjustments) go to the PostProcessingEffect. BlurAmount
-        // drives both 1D separable blur passes; when it drops to ≤ 0 the blur chain
-        // is bypassed at the post-process stage. Glass params go to the
-        // LiquidGlassEffect. No-op until the pipeline is connected; OnConnected
-        // applies all values at once.
-        private void ApplyValue(string key, float value)
+        // Apply BlurAmount: write the scalar to both H/V blur passes and, when the
+        // value crosses the 0 boundary, swap the post-process "Backdrop" source so the
+        // blur chain is bypassed (Backdrop = raw backdrop) or restored (Backdrop = V blur).
+        // "RawBackdrop" and the glass source are untouched — only "Backdrop" flips.
+        // SetSourceParameter resets animatable properties, so every routine parameter
+        // is re-synced after the swap. No-op until the pipeline is connected.
+        private void ApplyBlurAmount(float value)
         {
-            // Post-processing params: route to the PostProcessingEffect brush.
-            if (s_postProcessKeys.Contains(key))
+            bool bypass = value <= 0;
+            if (bypass != _blurBypassed && _postProcessBrush != null)
             {
-                _postProcessBrush?.Properties.InsertScalar(
-                    PostProcessingEffect.EffectNameValue + "." + key, value);
-                return;
-            }
+                _blurBypassed = bypass;
+                _postProcessBrush.SetSourceParameter("Backdrop",
+                    bypass ? _backdropBrush : _vBlurBrush);
 
-            if (key == "BlurAmount")
+                foreach (var (dp, target, _, path) in s_params)
+                {
+                    ApplyParam(target, path, (float)(double)GetValue(dp));
+                }
+            }
+            if (!bypass)
             {
-                bool bypass = value <= 0;
-                if (bypass != _blurBypassed && _postProcessBrush != null)
-                {
-                    _blurBypassed = bypass;
-                    // Swap the post-process "Backdrop" source only — "RawBackdrop"
-                    // stays connected to _backdropBrush; glass always reads from
-                    // _postProcessBrush. No backdrop dispose/recreate needed.
-                    _postProcessBrush.SetSourceParameter("Backdrop",
-                        bypass ? _backdropBrush : _vBlurBrush);
-
-                    // SetSourceParameter resets animatable properties, so re-sync
-                    // post-processing and glass parameters after the swap.
-                    foreach (var kv in s_paramKeys)
-                    {
-                        if (kv.Value == "BlurAmount") continue;
-                        float v = (float)(double)GetValue(kv.Key);
-                        if (s_postProcessKeys.Contains(kv.Value))
-                        {
-                            _postProcessBrush.Properties.InsertScalar(
-                                PostProcessingEffect.EffectNameValue + "." + kv.Value, v);
-                        }
-                        else
-                        {
-                            _glassBrush.Properties.InsertScalar(
-                                LiquidGlassEffect.EffectNameValue + "." + kv.Value, v);
-                        }
-                    }
-                }
-                if (!bypass)
-                {
-                    _hBlurBrush?.Properties.InsertScalar(BlurHEffect.BlurAmountPropertyPath, value);
-                    _vBlurBrush?.Properties.InsertScalar(BlurVEffect.BlurAmountPropertyPath, value);
-                }
-                return;
+                _hBlurBrush?.Properties.InsertScalar(BlurHEffect.BlurAmountPropertyPath, value);
+                _vBlurBrush?.Properties.InsertScalar(BlurVEffect.BlurAmountPropertyPath, value);
             }
-            _glassBrush?.Properties.InsertScalar(LiquidGlassEffect.EffectNameValue + "." + key, value);
         }
 
         /// <summary>
@@ -485,39 +709,53 @@ namespace LiquidGlassWinUI
         /// <see cref="Microsoft.UI.Composition.ScalarKeyFrameAnimation"/> with cubic
         /// ease-out. Runs entirely on the compositor thread — no UI-thread timers.
         /// </summary>
-        /// <param name="key">Parameter key (e.g. "TintA", "GlareAngle").</param>
+        /// <param name="key">Parameter key (e.g. "Exposure", "GlareAngle").</param>
         /// <param name="to">Target value.</param>
         /// <param name="durationMs">Animation duration in milliseconds.</param>
         public void AnimateScalar(string key, float to, double durationMs)
         {
             if (_compositor == null) return;
 
-            // Post-processing keys animate on the PostProcessingEffect brush.
-            if (s_postProcessKeys.Contains(key))
+            foreach (var (_, target, entryKey, path) in s_params)
             {
-                if (_postProcessBrush == null) return;
-                var path = PostProcessingEffect.EffectNameValue + "." + key;
-                var anim = _compositor.CreateScalarKeyFrameAnimation();
-                anim.Duration = TimeSpan.FromMilliseconds(durationMs);
-                anim.InsertKeyFrame(1.0f, to,
-                    _compositor.CreateCubicBezierEasingFunction(
-                        new System.Numerics.Vector2(0.215f, 0.61f),
-                        new System.Numerics.Vector2(0.355f, 1.0f)));
-                _postProcessBrush.Properties.StartAnimation(path, anim);
+                if (entryKey == key)
+                {
+                    CompositionEffectBrush brush = target == ParamTarget.PostProcess
+                        ? _postProcessBrush : _glassBrush;
+                    StartScalarAnimation(brush, path, to, durationMs);
+                    return;
+                }
+            }
+
+            // BlurAmount animates on both H/V blur brushes (registered as animatable in
+            // their effect factories). Only meaningful while not bypassed; a target ≤ 0
+            // would cross the bypass boundary, which is a discrete swap left to SetValue.
+            if (key == "BlurAmount")
+            {
+                if (!_blurBypassed && to > 0)
+                {
+                    StartScalarAnimation(_hBlurBrush, BlurHEffect.BlurAmountPropertyPath, to, durationMs);
+                    StartScalarAnimation(_vBlurBrush, BlurVEffect.BlurAmountPropertyPath, to, durationMs);
+                }
                 return;
             }
 
-            if (_glassBrush == null) return;
+            // Unknown key: preserve the legacy behaviour of addressing the glass path
+            // rather than silently no-op'ing.
+            StartScalarAnimation(_glassBrush,
+                LiquidGlassEffect.EffectNameValue + "." + key, to, durationMs);
+        }
 
-            var fullPath = LiquidGlassEffect.EffectNameValue + "." + key;
-            var animation = _compositor.CreateScalarKeyFrameAnimation();
-            animation.Duration = TimeSpan.FromMilliseconds(durationMs);
-            animation.InsertKeyFrame(1.0f, to,
+        private void StartScalarAnimation(CompositionBrush brush, string path, float to, double durationMs)
+        {
+            if (brush == null) return;
+            var anim = _compositor.CreateScalarKeyFrameAnimation();
+            anim.Duration = TimeSpan.FromMilliseconds(durationMs);
+            anim.InsertKeyFrame(1.0f, to,
                 _compositor.CreateCubicBezierEasingFunction(
                     new System.Numerics.Vector2(0.215f, 0.61f),   // ease-out cubic
                     new System.Numerics.Vector2(0.355f, 1.0f)));
-
-            _glassBrush.Properties.StartAnimation(fullPath, animation);
+            brush.Properties.StartAnimation(path, anim);
         }
 
         /// <summary>
@@ -525,7 +763,7 @@ namespace LiquidGlassWinUI
         /// <paramref name="target"/>. All animations are batched into a single
         /// <see cref="CompositionCommitBatch"/> so they start on the same compositor
         /// frame. <c>BlurAmount</c> is set directly (it lives on the H/V blur brushes,
-        /// not the glass cbuffer).
+        /// not the glass cbuffer) so its changed callback re-routes the pipeline.
         /// </summary>
         /// <remarks>
         /// The <paramref name="target"/> brush does not need to be connected — only its
@@ -533,59 +771,48 @@ namespace LiquidGlassWinUI
         /// </remarks>
         public void TransitionTo(LiquidGlassBrush target, double durationMs)
         {
+            void Batch_Completed(object sender, CompositionBatchCompletedEventArgs args)
+            {
+                // The compositor animations have settled at the target values. Sync each
+                // dependency property to the target's value so the brush's DPs match what
+                // is on screen, and so a later reconnect (OnConnected re-pushes DPs) or an
+                // external SetValue won't overwrite the endpoint with the pre-transition
+                // value. Doing it here — after the batch completes — avoids interrupting
+                // the animations.
+                foreach (var (dp, _, _, _) in s_params)
+                {
+                    SetValue(dp, target.GetValue(dp));
+                }
+                // BlurAmount is not in s_params. Sync it now — this also stops the H/V
+                // blur animations at their endpoint and applies any bypass source swap
+                // needed when the transition crossed the blur on/off boundary.
+                SetValue(BlurAmountProperty, target.BlurAmount);
+            }
             if (_glassBrush == null || _compositor == null || target == null) return;
 
             var batch = _compositor.GetCommitBatch(CompositionBatchTypes.Animation);
+            batch.Completed += Batch_Completed;
 
-            foreach (var (dp, key) in s_paramKeys)
+
+            foreach (var (dp, route, _, path) in s_params)
             {
-                var targetValue = (float)(double)target.GetValue(dp);
-
-                // BlurAmount drives the separable H/V blur passes, not the glass
-                // cbuffer. Set it directly so OnParamChanged → ApplyValue updates
-                // both blur brushes. Not animated, but it's 1 param out of 22.
-                if (key == "BlurAmount")
-                {
-                    SetValue(dp, (double)targetValue);
-                }
-                else if (s_postProcessKeys.Contains(key))
-                {
-                    // Post-processing params animate on the PostProcessingEffect brush.
-                    if (_postProcessBrush != null && _compositor != null)
-                    {
-                        var path = PostProcessingEffect.EffectNameValue + "." + key;
-                        var anim = _compositor.CreateScalarKeyFrameAnimation();
-                        anim.Duration = TimeSpan.FromMilliseconds(durationMs);
-                        anim.InsertKeyFrame(1.0f, targetValue,
-                            _compositor.CreateCubicBezierEasingFunction(
-                                new System.Numerics.Vector2(0.215f, 0.61f),
-                                new System.Numerics.Vector2(0.355f, 1.0f)));
-                        _postProcessBrush.Properties.StartAnimation(path, anim);
-                    }
-                }
-                else
-                {
-                    AnimateScalar(key, targetValue, durationMs);
-                }
+                float targetValue = (float)(double)target.GetValue(dp);
+                CompositionEffectBrush brush = route == ParamTarget.PostProcess
+                    ? _postProcessBrush : _glassBrush;
+                StartScalarAnimation(brush, path, targetValue, durationMs);
             }
-        }
 
-        // System DPI (physical px per logical px). GetDpiForSystem needs no window
-        // handle, so the brush can measure it itself in OnConnected — this is what
-        // makes the brush usable from XAML with no code-behind. (Returns the primary
-        // monitor's DPI; falls back to 1.0 on any failure.)
-        [DllImport("user32.dll")]
-        private static extern uint GetDpiForSystem();
-
-        private static float MeasureDpr()
-        {
-            try
+            // BlurAmount is animatable on the H/V blur brushes (their effect factories
+            // register BlurAmountPropertyPath as an animatable property). Animate it when
+            // the transition stays on the blurred side. A bypass boundary crossing
+            // (either side ≤ 0) is a discrete backdrop-source swap, so it is left to the
+            // Completed handler's SetValue → ApplyBlurAmount rather than forced through a
+            // continuous animation.
+            float blurTarget = (float)target.BlurAmount;
+            if (!_blurBypassed && blurTarget > 0)
             {
-                return GetDpiForSystem() / 96f;
-            }
-            catch
-            {
-                return 1.0f;
+                StartScalarAnimation(_hBlurBrush, BlurHEffect.BlurAmountPropertyPath, blurTarget, durationMs);
+                StartScalarAnimation(_vBlurBrush, BlurVEffect.BlurAmountPropertyPath, blurTarget, durationMs);
             }
         }
     }
