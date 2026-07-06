@@ -248,11 +248,21 @@ float4 LiquidGlassBody(float2 uv, float4 samplerDataExt, float4 samplerData)
         // reference: wide band → wide smoothing zone).
         float tau = RefThickness * dpr * 0.5;
         float2 normal = SmoothNormal(fragCoord, center, halfPx, tau);
-        // Scale to match the original AnalyticNormal magnitude convention for
-        // glare (nLen used in saturate(g * nLen)).  The direction (safeN) is
-        // length-invariant.
+        // Scale to match the original AnalyticNormal magnitude convention
+        // (same as Studio).  nLen/safeN are used for refraction only; glare
+        // has its own fixed-tau normal below.
         normal *= (1.0 / res.y) * 1.414213562 * 1000.0;
-        float nLen = length(normal);
+        float nLen = length(normal); // used for refraction direction (safeN) only; glare has its own fixed-tau normal below
+
+        // Glare normal — same SmoothNormal algorithm but with a FIXED tau so the
+        // specular highlight is decoupled from RefThickness.  tau=40*dpr matches
+        // the RefThickness=80 behaviour (wide smooth zone → continuous angular
+        // sweep). Changing RefThickness only affects the refraction band.
+        float  tauG = 40.0 * dpr;
+        float2 normalG = SmoothNormal(fragCoord, center, halfPx, tauG);
+        normalG *= (1.0 / res.y) * 1.414213562 * 1000.0;
+        float gnLen = length(normalG);
+
         // Refraction offset — always computed (no nmerged gate). The reference
         // shader computes offset = sign * Amount * pow(1-t, Power) unconditionally,
         // relying on alpha blending for the AA transition. Gating on nmerged>0
@@ -374,9 +384,9 @@ float4 LiquidGlassBody(float2 uv, float4 samplerDataExt, float4 samplerData)
         }
 
         // glare — directional specular highlight (RGB approximation of the LCH
-        // L/C-bump). Copied verbatim from LiquidGlassStudio; uses the analytical
-        // normal/nLen above. GlareRange controls the falloff via glareK; the geoFactor
-        // naturally →0 deep inside — no longer gated by edgeFactor/RefThickness.
+        // L/C-bump).  Uses its own fixed-tau normal (normalG/gnLen) so the
+        // specular stays consistent regardless of RefThickness.  GlareRange
+        // controls the falloff via glareK; the geoFactor naturally →0 deep inside.
         {
             float glareHardness = GlareHardness / 100.0;
             float glareFactorN = GlareFactor / 100.0;
@@ -391,7 +401,7 @@ float4 LiquidGlassBody(float2 uv, float4 samplerDataExt, float4 samplerData)
             glareK = min(glareK, glareMaxK);
             float glareGeoFactor = clamp(pow(1.0 + merged * res.y / (1500.0 * dpr) * glareK + glareHardness, 5.0), 0.0, 1.0);
 
-            float2 nNorm = nLen > 1e-6 ? normal / nLen : float2(0.0, 0.0);
+            float2 nNorm = gnLen > 1e-6 ? normalG / gnLen : float2(0.0, 0.0);
             float nAngle = atan2(nNorm.y, nNorm.x);
             if (nAngle < 0.0) nAngle += 2.0 * PI;
             float glareAngle = (nAngle - PI / 4.0 + glareAngleNorm) * 2.0;
@@ -404,7 +414,7 @@ float4 LiquidGlassBody(float2 uv, float4 samplerDataExt, float4 samplerData)
             float3 glareBase = lerp(blurredPixel.rgb, tintRgb, tintA * 0.5);
             float3 glareColor = lerp(glareBase, float3(1.0, 1.0, 1.0), clamp(g, 0.0, 1.0));
             float glareCoverage = smoothstep(0.0, 2.0, GlareRange * dpr);
-            outColor = lerp(outColor, float4(glareColor, 1.0), saturate(g * nLen) * glareCoverage);
+            outColor = lerp(outColor, float4(glareColor, 1.0), saturate(g * gnLen) * glareCoverage);
         }
     }
     else
