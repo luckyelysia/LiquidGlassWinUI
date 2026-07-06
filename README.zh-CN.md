@@ -2,7 +2,7 @@
 
 一个 WinUI 3 `XamlCompositionBrushBase`，在 backdrop 内容之上渲染 Apple 风格的"液态玻璃"材质。
 只需在 XAML 页面控件的 Background 中放入 `<lg:LiquidGlassBrush />` 即可获得实时折射、色散、菲涅耳边缘光、
-镜面高光和染色玻璃效果——所有参数均由依赖属性驱动，可直接从 XAML 绑定和动画化。
+镜面高光、染色玻璃、Bloom 混合及完整色彩调整——所有参数均由依赖属性驱动，可直接从 XAML 绑定和动画化。
 
 ```xml
 xmlns:lg="using:LiquidGlassWinUI"
@@ -10,6 +10,9 @@ xmlns:lg="using:LiquidGlassWinUI"
 <Rectangle Fill="{x:Null}">
   <Rectangle.Background>
     <lg:LiquidGlassBrush BlurAmount="1.93"
+                         BloomAmount="0.15"
+                         Brightness="0.05"
+                         Contrast="1.1"
                          DispersionRange="0.39"
                          Exposure="1.2"
                          GlareAngle="-135"
@@ -23,8 +26,11 @@ xmlns:lg="using:LiquidGlassWinUI"
                          RefFresnelHardness="0"
                          RefFresnelRange="57.84"
                          RefThickness="80"
+                         Saturation="1.15"
                          ShapeRadius="0.92"
-                         ShapeRoundness="3.84"/>
+                         ShapeRoundness="3.84"
+                         Temperature="0.1"
+                         Vibrance="0.2"/>
   </Rectangle.Background>
 </Rectangle>
 ```
@@ -44,7 +50,7 @@ xmlns:lg="using:LiquidGlassWinUI"
 
 ## LiquidGlassBrush 公共 API
 
-所有材质参数均暴露为 `DependencyProperty`。全部 20 个参数均可从 XAML 直接绑定和动画化，无需代码后置。
+所有材质参数均暴露为 `DependencyProperty`。全部 28 个参数均可从 XAML 直接绑定和动画化，无需代码后置。
 
 ### 折射 (Refraction)
 
@@ -70,14 +76,34 @@ xmlns:lg="using:LiquidGlassWinUI"
 | `GlareOppositeFactor` | 80 | 0–100 | 次高光（反方向）强度 |
 | `GlareAngle` | -45 | — | 高光条纹方向（度） |
 
-### 模糊与染色 (Blur & Tint)
+### 模糊 (Blur)
 
 | 属性 | 默认值 | 范围 | 说明 |
 |---|---|---|---|
 | `BlurAmount` | 1.0 | — | backdrop 模糊半径（像素）。设为 0 可完全绕过模糊链。 |
+
+### 染色 (Tint)
+
+染色在 LiquidGlass 着色器的折射阶段应用。
+
+| 属性 | 默认值 | 范围 | 说明 |
+|---|---|---|---|
 | `TintR` / `TintG` / `TintB` | 255 | 0–255 | 玻璃染色 RGB 通道 |
 | `TintA` | 0 | 0–1 | 染色不透明度（0 = 无色透明，1 = 完全染色） |
-| `Exposure` | 1.0 | 0.6–1.6 | backdrop 亮度增益 |
+
+### 后处理 (Post-Processing)
+
+Bloom 混合与色彩调整在模糊链与玻璃着色器之间的独立后处理阶段运行。所有后处理参数均可通过合成器线程的 `ScalarKeyFrameAnimation` 动画化。
+
+| 属性 | 默认值 | 范围 | 说明 |
+|---|---|---|---|
+| `BloomAmount` | 0 | 0–1 | 模糊与原始 backdrop 混合（0 = 纯玻璃效果，1 = 完全清晰） |
+| `Exposure` | 1.0 | 0.5–2 | backdrop 亮度增益（乘性；从 LiquidGlass 着色器迁移而来） |
+| `Brightness` | 0 | −1–1 | 加性亮度（正值提亮，负值压暗） |
+| `Contrast` | 1.0 | 0–2 | 以中灰为中心的对比度系数（1.0 = 不变） |
+| `Saturation` | 1.0 | 0–2 | 色彩饱和度（0 = 灰度，1 = 不变，2 = 过饱和） |
+| `Temperature` | 0 | −1–1 | 色温偏移（负值偏冷/蓝，正值偏暖/黄） |
+| `Vibrance` | 0 | 0–1 | 智能自然饱和度增强，针对低饱和度区域（避免肤色过饱和） |
 
 ### 形状 (Shape)
 
@@ -97,6 +123,8 @@ xmlns:lg="using:LiquidGlassWinUI"
 
 `LiquidGlassBrush` 构建的是 Win2D `CompositionEffectBrush` 链，但效果节点**并非**内置 Win2D
 效果——它们是通过 `CustomEffectRuntime` 注册的自定义 HLSL 着色器。
+
+**管线:** `backdrop → BlurH → BlurV → PostProcessing → LiquidGlassEffect`
 
 ### CustomEffectRuntime（原生层）
 
@@ -124,6 +152,7 @@ C# 侧（`Effects/CustomEffectBase.cs`、`Interop/CustomEffectBuilder.cs`、
 | `LiquidGlass.hlsl` | 主玻璃材质 —— SDF、折射、色散、菲涅耳、高光、染色、抗锯齿 |
 | `BlurH.hlsl` | 1D 水平可分离高斯模糊（双线性合并，21 taps → 10 对） |
 | `BlurV.hlsl` | 1D 垂直可分离高斯模糊（相同卷积核） |
+| `PostProcessing.hlsl` | Bloom 混合 + 色彩调整（曝光、色温、亮度、对比度、饱和度、自然饱和度） |
 
 所有着色器均以 `<EmbeddedResource>` 嵌入程序集——消费者输出目录中无散落文件。
 

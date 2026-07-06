@@ -60,6 +60,13 @@ namespace LiquidGlassWinUI
         // name). The full animatable path is <EffectName>.<key>.
         private static readonly Dictionary<DependencyProperty, string> s_paramKeys = new();
 
+        // Post-processing parameter keys — routed to PostProcessingEffect instead of the glass brush.
+        private static readonly HashSet<string> s_postProcessKeys = new()
+        {
+            "BloomAmount", "Brightness", "Contrast", "Saturation",
+            "Temperature", "Exposure", "Vibrance",
+        };
+
         private static DependencyProperty RegisterParam(string key, double defaultValue)
         {
             var dp = DependencyProperty.Register(key, typeof(double), typeof(LiquidGlassBrush),
@@ -183,10 +190,46 @@ namespace LiquidGlassWinUI
         /// <summary>Alpha (opacity) of the glass tint, 0–1 (default 0 = untinted).</summary>
         public double TintA { get => (double)GetValue(TintAProperty); set => SetValue(TintAProperty, value); }
 
-        /// <summary>Backing dependency property for <see cref="Exposure"/>.</summary>
-        public static readonly DependencyProperty ExposureProperty = RegisterGlassParam("Exposure");
-        /// <summary>Backdrop brightness gain, 0.6–1.6 (default 1.0 = no change).</summary>
+        // Exposure moved to PostProcessingEffect.
+
+        // ---- Bloom (PostProcessingEffect) ----
+
+        /// <summary>Backing dependency property for <see cref="BloomAmount"/>.</summary>
+        public static readonly DependencyProperty BloomAmountProperty = RegisterParam("BloomAmount", 0.0);
+        /// <summary>Cross-fade between blurred and raw backdrop: 0 = pure blurred glass (default), 1 = fully sharp.</summary>
+        public double BloomAmount { get => (double)GetValue(BloomAmountProperty); set => SetValue(BloomAmountProperty, value); }
+
+        // ---- Colour Adjustments (PostProcessingEffect) ----
+
+        /// <summary>Backing dependency property for <see cref="Brightness"/>.</summary>
+        public static readonly DependencyProperty BrightnessProperty = RegisterParam("Brightness", 0.0);
+        /// <summary>Additive brightness: -1 = fully dark, 0 = unchanged, +1 = fully bright.</summary>
+        public double Brightness { get => (double)GetValue(BrightnessProperty); set => SetValue(BrightnessProperty, value); }
+
+        /// <summary>Backing dependency property for <see cref="Contrast"/>.</summary>
+        public static readonly DependencyProperty ContrastProperty = RegisterParam("Contrast", 1.0);
+        /// <summary>Contrast multiplier around mid-grey: 0 = flat grey, 1 = unchanged, 2 = doubled.</summary>
+        public double Contrast { get => (double)GetValue(ContrastProperty); set => SetValue(ContrastProperty, value); }
+
+        /// <summary>Backing dependency property for <see cref="Saturation"/>.</summary>
+        public static readonly DependencyProperty SaturationProperty = RegisterParam("Saturation", 1.0);
+        /// <summary>Saturation multiplier: 0 = greyscale, 1 = unchanged, 2 = oversaturated.</summary>
+        public double Saturation { get => (double)GetValue(SaturationProperty); set => SetValue(SaturationProperty, value); }
+
+        /// <summary>Backing dependency property for <see cref="Temperature"/>.</summary>
+        public static readonly DependencyProperty TemperatureProperty = RegisterParam("Temperature", 0.0);
+        /// <summary>Colour temperature shift: -1 = cool (blue), 0 = unchanged, +1 = warm (yellow/red).</summary>
+        public double Temperature { get => (double)GetValue(TemperatureProperty); set => SetValue(TemperatureProperty, value); }
+
+        /// <summary>Backing dependency property for <see cref="Exposure"/> (PostProcessingEffect).</summary>
+        public static readonly DependencyProperty ExposureProperty = RegisterParam("Exposure", 1.0);
+        /// <summary>Exposure gain: 0.5 = half brightness, 1 = unchanged, 2 = double brightness.</summary>
         public double Exposure { get => (double)GetValue(ExposureProperty); set => SetValue(ExposureProperty, value); }
+
+        /// <summary>Backing dependency property for <see cref="Vibrance"/>.</summary>
+        public static readonly DependencyProperty VibranceProperty = RegisterParam("Vibrance", 0.0);
+        /// <summary>Smart vibrance boost targeting low-saturation regions: 0 = off, 1 = full.</summary>
+        public double Vibrance { get => (double)GetValue(VibranceProperty); set => SetValue(VibranceProperty, value); }
 
         // ---- Shape ----
 
@@ -220,12 +263,14 @@ namespace LiquidGlassWinUI
         private static CompositionEffectFactory s_hBlurFactory;
         private static CompositionEffectFactory s_vBlurFactory;
         private static CompositionEffectFactory s_glassFactory;
+        private static CompositionEffectFactory s_postProcessFactory;
         private static readonly object s_poolLock = new();
 
         private Compositor _compositor;
         private CompositionEffectBrush _glassBrush;
         private CompositionEffectBrush _hBlurBrush;   // separable blur (H pass)
         private CompositionEffectBrush _vBlurBrush;   // separable blur (V pass)
+        private CompositionEffectBrush _postProcessBrush; // bloom + colour adjustments
         private CompositionBrush _backdropBrush;        // raw backdrop source (tracked for disposal on toggle)
         private bool _blurBypassed;                   // true when BlurAmount <= 0 (blur chain disconnected)
 
@@ -253,7 +298,7 @@ namespace LiquidGlassWinUI
             {
                 _compositor = CompositionTarget.GetCompositorForCurrentThread();
 
-                CompositionEffectFactory hFactory, vFactory, gFactory;
+                CompositionEffectFactory hFactory, vFactory, gFactory, postProcessFactory;
                 lock (s_poolLock)
                 {
                     if (s_hBlurFactory == null)
@@ -274,10 +319,24 @@ namespace LiquidGlassWinUI
                             .Select(p => LiquidGlassEffect.EffectNameValue + "." + p.Key)
                             .ToList();
                         s_glassFactory = _compositor.CreateEffectFactory(glassEffect, glassPaths);
+
+                        s_postProcessFactory = _compositor.CreateEffectFactory(
+                            new PostProcessingEffect().Create(),
+                            new List<string>
+                            {
+                                PostProcessingEffect.BloomAmountPropertyPath,
+                                PostProcessingEffect.BrightnessPropertyPath,
+                                PostProcessingEffect.ContrastPropertyPath,
+                                PostProcessingEffect.SaturationPropertyPath,
+                                PostProcessingEffect.TemperaturePropertyPath,
+                                PostProcessingEffect.ExposurePropertyPath,
+                                PostProcessingEffect.VibrancePropertyPath,
+                            });
                     }
                     hFactory = s_hBlurFactory;
                     vFactory = s_vBlurFactory;
                     gFactory = s_glassFactory;
+                    postProcessFactory = s_postProcessFactory;
                 }
 
                 _backdropBrush = _compositor.CreateBackdropBrush();
@@ -288,19 +347,23 @@ namespace LiquidGlassWinUI
                 _vBlurBrush = vFactory.CreateBrush();
                 _vBlurBrush.SetSourceParameter("Backdrop", _hBlurBrush);
 
-                _glassBrush = gFactory.CreateBrush();
+                _postProcessBrush = postProcessFactory.CreateBrush();
+                _postProcessBrush.SetSourceParameter("RawBackdrop", _backdropBrush);
 
-                // When BlurAmount is 0 at connect time, bypass the blur chain:
-                // connect the glass directly to the raw backdrop. When > 0, route
-                // through the separable H/V blur passes as usual.
+                _glassBrush = gFactory.CreateBrush();
+                _glassBrush.SetSourceParameter("Backdrop", _postProcessBrush);
+
+                // When BlurAmount is 0 at connect time, both bloom sources see
+                // the raw backdrop (lerp(raw, raw, B) == raw — identity). When
+                // > 0, the bloom blends the blurred and raw backdrops.
                 if (BlurAmount <= 0)
                 {
                     _blurBypassed = true;
-                    _glassBrush.SetSourceParameter("Backdrop", _backdropBrush);
+                    _postProcessBrush.SetSourceParameter("Backdrop", _backdropBrush);
                 }
                 else
                 {
-                    _glassBrush.SetSourceParameter("Backdrop", _vBlurBrush);
+                    _postProcessBrush.SetSourceParameter("Backdrop", _vBlurBrush);
                 }
 
                 // Push every parameter's current value (DPs may have been set before
@@ -318,6 +381,7 @@ namespace LiquidGlassWinUI
 
                 _hBlurBrush?.Dispose();
                 _vBlurBrush?.Dispose();
+                _postProcessBrush?.Dispose();
                 _backdropBrush?.Dispose();
                 _glassBrush?.Dispose();
 
@@ -336,6 +400,7 @@ namespace LiquidGlassWinUI
             // here or subsequent brush instances would fail to create brushes.
             _hBlurBrush?.Dispose();
             _vBlurBrush?.Dispose();
+            _postProcessBrush?.Dispose();
             _backdropBrush?.Dispose();
 
             // CompositionBrush == _glassBrush; dispose once via the base property.
@@ -343,6 +408,7 @@ namespace LiquidGlassWinUI
 
             CompositionBrush = null;
             _glassBrush = null;
+            _postProcessBrush = null;
             _hBlurBrush = null;
             _vBlurBrush = null;
             _backdropBrush = null;
@@ -358,32 +424,50 @@ namespace LiquidGlassWinUI
             }
         }
 
-        // Route one parameter to the right effect brush. BlurAmount drives both 1D
-        // separable blur passes; when it drops to ≤ 0 the blur chain is disconnected
-        // and the glass reads the raw backdrop directly (avoiding two full-screen
-        // shader passes). Glass params go to the LiquidGlassEffect. No-op until the
-        // pipeline is connected; OnConnected applies all values at once.
+        // Route one parameter to the right effect brush. Post-processing params
+        // (bloom + colour adjustments) go to the PostProcessingEffect. BlurAmount
+        // drives both 1D separable blur passes; when it drops to ≤ 0 the blur chain
+        // is bypassed at the post-process stage. Glass params go to the
+        // LiquidGlassEffect. No-op until the pipeline is connected; OnConnected
+        // applies all values at once.
         private void ApplyValue(string key, float value)
         {
+            // Post-processing params: route to the PostProcessingEffect brush.
+            if (s_postProcessKeys.Contains(key))
+            {
+                _postProcessBrush?.Properties.InsertScalar(
+                    PostProcessingEffect.EffectNameValue + "." + key, value);
+                return;
+            }
+
             if (key == "BlurAmount")
             {
                 bool bypass = value <= 0;
-                if (bypass != _blurBypassed && _glassBrush != null)
+                if (bypass != _blurBypassed && _postProcessBrush != null)
                 {
                     _blurBypassed = bypass;
-                    // Dispose the old backdrop source before replacing it.
-                    _backdropBrush?.Dispose();
-                    _backdropBrush = bypass ? _compositor.CreateBackdropBrush() : null;
-                    _glassBrush.SetSourceParameter("Backdrop",
+                    // Swap the post-process "Backdrop" source only — "RawBackdrop"
+                    // stays connected to _backdropBrush; glass always reads from
+                    // _postProcessBrush. No backdrop dispose/recreate needed.
+                    _postProcessBrush.SetSourceParameter("Backdrop",
                         bypass ? _backdropBrush : _vBlurBrush);
-                    // SetSourceParameter resets animatable properties on a factory
-                    // brush, so re-sync every glass parameter after the swap.
+
+                    // SetSourceParameter resets animatable properties, so re-sync
+                    // post-processing and glass parameters after the swap.
                     foreach (var kv in s_paramKeys)
                     {
                         if (kv.Value == "BlurAmount") continue;
-                        _glassBrush.Properties.InsertScalar(
-                            LiquidGlassEffect.EffectNameValue + "." + kv.Value,
-                            (float)(double)GetValue(kv.Key));
+                        float v = (float)(double)GetValue(kv.Key);
+                        if (s_postProcessKeys.Contains(kv.Value))
+                        {
+                            _postProcessBrush.Properties.InsertScalar(
+                                PostProcessingEffect.EffectNameValue + "." + kv.Value, v);
+                        }
+                        else
+                        {
+                            _glassBrush.Properties.InsertScalar(
+                                LiquidGlassEffect.EffectNameValue + "." + kv.Value, v);
+                        }
                     }
                 }
                 if (!bypass)
@@ -406,7 +490,24 @@ namespace LiquidGlassWinUI
         /// <param name="durationMs">Animation duration in milliseconds.</param>
         public void AnimateScalar(string key, float to, double durationMs)
         {
-            if (_glassBrush == null || _compositor == null) return;
+            if (_compositor == null) return;
+
+            // Post-processing keys animate on the PostProcessingEffect brush.
+            if (s_postProcessKeys.Contains(key))
+            {
+                if (_postProcessBrush == null) return;
+                var path = PostProcessingEffect.EffectNameValue + "." + key;
+                var anim = _compositor.CreateScalarKeyFrameAnimation();
+                anim.Duration = TimeSpan.FromMilliseconds(durationMs);
+                anim.InsertKeyFrame(1.0f, to,
+                    _compositor.CreateCubicBezierEasingFunction(
+                        new System.Numerics.Vector2(0.215f, 0.61f),
+                        new System.Numerics.Vector2(0.355f, 1.0f)));
+                _postProcessBrush.Properties.StartAnimation(path, anim);
+                return;
+            }
+
+            if (_glassBrush == null) return;
 
             var fullPath = LiquidGlassEffect.EffectNameValue + "." + key;
             var animation = _compositor.CreateScalarKeyFrameAnimation();
@@ -446,6 +547,21 @@ namespace LiquidGlassWinUI
                 if (key == "BlurAmount")
                 {
                     SetValue(dp, (double)targetValue);
+                }
+                else if (s_postProcessKeys.Contains(key))
+                {
+                    // Post-processing params animate on the PostProcessingEffect brush.
+                    if (_postProcessBrush != null && _compositor != null)
+                    {
+                        var path = PostProcessingEffect.EffectNameValue + "." + key;
+                        var anim = _compositor.CreateScalarKeyFrameAnimation();
+                        anim.Duration = TimeSpan.FromMilliseconds(durationMs);
+                        anim.InsertKeyFrame(1.0f, targetValue,
+                            _compositor.CreateCubicBezierEasingFunction(
+                                new System.Numerics.Vector2(0.215f, 0.61f),
+                                new System.Numerics.Vector2(0.355f, 1.0f)));
+                        _postProcessBrush.Properties.StartAnimation(path, anim);
+                    }
                 }
                 else
                 {

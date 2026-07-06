@@ -4,8 +4,9 @@
 
 A WinUI 3 `XamlCompositionBrushBase` that renders an Apple-style "liquid glass" material
 over backdrop content. Drop a `<lg:LiquidGlassBrush />` into any control's `Background`
-and get real-time refraction, chromatic dispersion, Fresnel rim, specular glare, and
-tinted glass — all driven by dependency properties that bind and animate directly from XAML.
+and get real-time refraction, chromatic dispersion, Fresnel rim, specular glare,
+tinted glass, bloom, and full colour adjustments — all driven by dependency properties
+that bind and animate directly from XAML.
 
 ```xml
 xmlns:lg="using:LiquidGlassWinUI"
@@ -13,6 +14,9 @@ xmlns:lg="using:LiquidGlassWinUI"
 <Rectangle Fill="{x:Null}">
   <Rectangle.Background>
     <lg:LiquidGlassBrush BlurAmount="1.93"
+                         BloomAmount="0.15"
+                         Brightness="0.05"
+                         Contrast="1.1"
                          DispersionRange="0.39"
                          Exposure="1.2"
                          GlareAngle="-135"
@@ -26,8 +30,11 @@ xmlns:lg="using:LiquidGlassWinUI"
                          RefFresnelHardness="0"
                          RefFresnelRange="57.84"
                          RefThickness="80"
+                         Saturation="1.15"
                          ShapeRadius="0.92"
-                         ShapeRoundness="3.84"/>
+                         ShapeRoundness="3.84"
+                         Temperature="0.1"
+                         Vibrance="0.2"/>
   </Rectangle.Background>
 </Rectangle>
 ```
@@ -47,7 +54,7 @@ Solution: `LiquidGlassWinUI.slnx` (requires Visual Studio 2022+ or `dotnet` CLI 
 
 ## LiquidGlassBrush — public API
 
-The brush exposes every material parameter as a `DependencyProperty`. All 20 parameters bind and animate from XAML with no code-behind.
+The brush exposes every material parameter as a `DependencyProperty`. All 28 parameters bind and animate from XAML with no code-behind.
 
 ### Refraction
 
@@ -73,14 +80,34 @@ The brush exposes every material parameter as a `DependencyProperty`. All 20 par
 | `GlareOppositeFactor` | 80 | 0–100 | Secondary (opposite-facing) glare intensity |
 | `GlareAngle` | -45 | — | Glare streak direction in degrees |
 
-### Blur & Tint
+### Blur
 
 | Property | Default | Range | Description |
 |---|---|---|---|
 | `BlurAmount` | 1.0 | — | Backdrop blur radius (px). Set to 0 to bypass the blur chain entirely. |
+
+### Tint
+
+Tint is applied inside the LiquidGlass shader during the refraction pass.
+
+| Property | Default | Range | Description |
+|---|---|---|---|
 | `TintR` / `TintG` / `TintB` | 255 | 0–255 | Glass tint colour channels |
 | `TintA` | 0 | 0–1 | Tint opacity (0 = clear, 1 = fully tinted) |
-| `Exposure` | 1.0 | 0.6–1.6 | Backdrop brightness gain |
+
+### Post-Processing
+
+Bloom blend and colour adjustments run in a dedicated post-processing stage between the blur chain and the glass shader. All post-processing parameters are animatable via compositor-thread `ScalarKeyFrameAnimation`.
+
+| Property | Default | Range | Description |
+|---|---|---|---|
+| `BloomAmount` | 0 | 0–1 | Cross-fade between blurred and raw backdrop (0 = pure glass, 1 = fully sharp) |
+| `Exposure` | 1.0 | 0.5–2 | Backdrop brightness gain (multiplicative; migrated from LiquidGlass shader) |
+| `Brightness` | 0 | −1–1 | Additive brightness (positive = lighter, negative = darker) |
+| `Contrast` | 1.0 | 0–2 | Contrast multiplier around mid-grey (1.0 = unchanged) |
+| `Saturation` | 1.0 | 0–2 | Colour saturation (0 = greyscale, 1 = unchanged, 2 = oversaturated) |
+| `Temperature` | 0 | −1–1 | Colour temperature shift (negative = cooler/blue, positive = warmer/yellow) |
+| `Vibrance` | 0 | 0–1 | Smart vibrance boost targeting low-saturation regions (avoids skin-tone oversaturation) |
 
 ### Shape
 
@@ -101,6 +128,8 @@ The brush exposes every material parameter as a `DependencyProperty`. All 20 par
 `LiquidGlassBrush` builds a Win2D `CompositionEffectBrush` chain, but the effect nodes are
 **not** built-in Win2D effects — they are custom HLSL shaders registered through the
 `CustomEffectRuntime`.
+
+**Pipeline:** `backdrop → BlurH → BlurV → PostProcessing → LiquidGlassEffect`
 
 ### CustomEffectRuntime (native)
 
@@ -131,6 +160,7 @@ pipeline, with no app-side intermediate surfaces or render targets.
 | `LiquidGlass.hlsl` | Main glass material — SDF, refraction, dispersion, Fresnel, glare, tint, AA |
 | `BlurH.hlsl` | 1D horizontal separable Gaussian (bilinear-merged, 21 taps → 10 pairs) |
 | `BlurV.hlsl` | 1D vertical separable Gaussian (same kernel) |
+| `PostProcessing.hlsl` | Bloom blend + colour adjustments (exposure, temperature, brightness, contrast, saturation, vibrance) |
 
 All shaders are embedded as `<EmbeddedResource>` in the assembly — no loose files in the
 consumer's output directory.

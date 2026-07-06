@@ -62,7 +62,7 @@ namespace LiquidGlassWinUI.Effects
             new() { Key = "TintG",               Offset = 60,  Default = 255,  Min = 0,    Max = 255,  Step = 1,    Group = "Tint", Label = "Tint G" },
             new() { Key = "TintB",               Offset = 64,  Default = 255,  Min = 0,    Max = 255,  Step = 1,    Group = "Tint", Label = "Tint B" },
             new() { Key = "TintA",               Offset = 68,  Default = 0,    Min = 0,    Max = 1,    Step = 0.01f, Group = "Tint", Label = "Tint Alpha" },
-            new() { Key = "Exposure",            Offset = 52,  Default = 1.0f, Min = 0.6f, Max = 1.6f, Step = 0.01f, Group = "Tint", Label = "Exposure" },
+            // Exposure moved to PostProcessingEffect; cbuffer slot 52 kept at 1.0.
             // Shape (Width/Height dropped — the glass fills the brush rect = the control)
             new() { Key = "ShapeRadius",         Offset = 96,  Default = 0.4f, Min = 0,    Max = 1,    Step = 0.01f, Group = "Shape", Label = "Corner Radius (0..1)" },
             new() { Key = "ShapeRoundness",      Offset = 100, Default = 5,    Min = 2,    Max = 7,    Step = 0.01f, Group = "Shape", Label = "Roundness (n)" },
@@ -99,6 +99,7 @@ namespace LiquidGlassWinUI.Effects
                 {
                     values[p.Offset / 4] = p.Default;
                 }
+                values[13] = 1.0f; // Exposure slot (offset 52) — moved to PostProcessingEffect; keep at 1.0
                 values[31] = Dpr; // cbuffer offset 124 (Dpr; not in Params — set by the brush)
                 byte[] bytes = new byte[CbufferFloats * sizeof(float)];
                 Buffer.BlockCopy(values, 0, bytes, 0, bytes.Length);

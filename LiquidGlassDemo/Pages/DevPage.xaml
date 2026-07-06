@@ -537,12 +537,14 @@
             StepFrequency="0.01"
             Value="{x:Bind GlassBrush.GlareAngle, Mode=TwoWay}" />
 
-          <!--  ── Blur ──  -->
+          <!--  ── Post-Processing ──  -->
           <TextBlock
             Margin="0,8,0,0"
             FontWeight="SemiBold"
             Foreground="#FF8AC8FF"
-            Text="Blur" />
+            Text="Post-Processing" />
+
+          <!--  Blur chain  -->
           <Slider
             Header="Blur Amount"
             Maximum="20"
@@ -551,12 +553,67 @@
             StepFrequency="0.01"
             Value="{x:Bind GlassBrush.BlurAmount, Mode=TwoWay}" />
 
+          <!--  Bloom  -->
+          <Slider
+            Header="Bloom"
+            Maximum="1"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.BloomAmount, Mode=TwoWay}" />
+
+          <!--  Colour Adjustments  -->
+          <Slider
+            Header="Exposure"
+            Maximum="2"
+            Minimum="0.5"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.Exposure, Mode=TwoWay}" />
+          <Slider
+            Header="Brightness"
+            Maximum="1"
+            Minimum="-1"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.Brightness, Mode=TwoWay}" />
+          <Slider
+            Header="Contrast"
+            Maximum="2"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.Contrast, Mode=TwoWay}" />
+          <Slider
+            Header="Saturation"
+            Maximum="2"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.Saturation, Mode=TwoWay}" />
+          <Slider
+            Header="Temperature"
+            Maximum="1"
+            Minimum="-1"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.Temperature, Mode=TwoWay}" />
+          <Slider
+            Header="Vibrance"
+            Maximum="1"
+            Minimum="0"
+            SnapsTo="StepValues"
+            StepFrequency="0.01"
+            Value="{x:Bind GlassBrush.Vibrance, Mode=TwoWay}" />
+
           <!--  ── Tint ──  -->
           <TextBlock
             Margin="0,8,0,0"
             FontWeight="SemiBold"
             Foreground="#FF8AC8FF"
             Text="Tint" />
+
+          <!--  Tint (applied in LiquidGlass shader)  -->
           <ColorPicker
             x:Name="TintPicker"
             ColorChanged="TintPicker_ColorChanged"
@@ -565,15 +622,6 @@
             IsAlphaSliderVisible="True"
             IsColorSliderVisible="True"
             IsHexInputVisible="True" />
-
-
-          <Slider
-            Header="Exposure"
-            Maximum="10"
-            Minimum="0.6"
-            SnapsTo="StepValues"
-            StepFrequency="0.01"
-            Value="{x:Bind GlassBrush.Exposure, Mode=TwoWay}" />
         </StackPanel>
       </StackPanel>
     </ScrollViewer>
@@ -607,6 +655,7 @@
           GlareFactor="71.52"
           GlareHardness="13.00"
           GlareRange="36.13"
+          Opacity="1"
           RefDispersion="3.50"
           RefFactor="3.37"
           RefFresnelFactor="21.96"

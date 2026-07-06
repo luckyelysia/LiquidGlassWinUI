@@ -55,7 +55,7 @@ cbuffer LiquidGlassParams : register(b0)
     float GlareOppositeFactor; // offset 40
     float GlareAngle;          // offset 44
     float BlurAmount;          // offset 48  (unused in-shader; drives upstream blur)
-    float Exposure;            // offset 52 (backdrop brightness gain, 0.6-1.6, default 1.0)
+    float Exposure;            // offset 52 (unused — moved to PostProcessingEffect; slot kept for cbuffer layout parity)
     float TintR;               // offset 56
     float TintG;               // offset 60
     float TintB;               // offset 64
@@ -349,8 +349,7 @@ float4 LiquidGlassBody(float2 uv, float4 samplerDataExt, float4 samplerData)
             float ba = blurredPixel.a;
             blurredPixel.rgb = ba > 0.001 ? blurredPixel.rgb / ba : float3(0, 0, 0);
         }
-        // base tint
-        blurredPixel.rgb *= Exposure;
+        // base tint (Exposure moved to PostProcessingEffect)
         outColor = lerp(blurredPixel, float4(tintRgb, 1.0), tintA * 0.8);
 
         // fresnel rim — tint lightened toward white (RGB approximation of the LCH
