@@ -22,6 +22,7 @@ public sealed partial class TabBarPage : Page
 
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
+        Loaded -= Page_Loaded;
         RotateAnim.Begin();
         PulseAnim.Begin();
         BounceAnim.Begin();

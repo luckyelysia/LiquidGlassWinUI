@@ -8,7 +8,7 @@
 //
 // sigma = MAX_BLUR_RADIUS / 3, weights precomputed CPU-side.
 
-#define MAX_BLUR_RADIUS 20   // original kernel radius (for weight computation)
+#define MAX_BLUR_RADIUS 6   // original kernel radius (for weight computation)
 #define MAX_BLUR_PAIRS  5    // 10 bilinear pairs packed into 5 float4s
 
 Texture2D texture0;
