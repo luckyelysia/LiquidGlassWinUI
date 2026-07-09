@@ -346,7 +346,7 @@ namespace LiquidGlassWinUI
             DependencyProperty.Register(
                 nameof(BloomAmount), typeof(double), typeof(LiquidGlassBrush),
                 new PropertyMetadata(1.0, OnBloomAmountChanged));
-        /// <summary>Cross-fade between blurred and raw backdrop: 0 = pure blurred glass (default), 1 = fully sharp.</summary>
+        /// <summary>Cross-fade between sharp and blurred backdrop: 0 = fully sharp (raw backdrop), 1 = fully blurred.</summary>
         public double BloomAmount { get => (double)GetValue(BloomAmountProperty); set => SetValue(BloomAmountProperty, value); }
         private static void OnBloomAmountChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
             => ((LiquidGlassBrush)d).ApplyParam(
