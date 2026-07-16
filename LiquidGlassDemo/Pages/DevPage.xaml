@@ -8,6 +8,8 @@
   xmlns:local="using:LiquidGlassDemo.Pages"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   Background="#202020"
+  Loaded="Page_Loaded"
+  NavigationCacheMode="Enabled"
   mc:Ignorable="d">
   <Page.Resources>
     <SolidColorBrush x:Key="CardA" Color="#FFEF5350" />
@@ -65,6 +67,72 @@
         To="-26"
         Duration="0:0:0.8" />
     </Storyboard>
+
+    <!--
+      ── Preset brushes ───────────────────────────────────────────────────
+      Each x:Name becomes a ComboBox entry. To add a preset:
+        1. Tweak the sliders until you like the look
+        2. Click "Copy XAML" → get a <lg:LiquidGlassBrush ... /> snippet
+        3. Paste it below as a new resource with x:Name="Preset_YourName"
+        4. Add its display name to the _presetNames list in code-behind
+    -->
+    <lg:LiquidGlassBrush
+      x:Name="Preset_Default"
+      BlurAmount="1.93"
+      DispersionRange="0.39"
+      Exposure="1.2"
+      GlareAngle="-135.00"
+      GlareConvergence="100.00"
+      GlareFactor="71.52"
+      GlareHardness="13.00"
+      GlareRange="36.13"
+      RefDispersion="3.50"
+      RefFactor="3.37"
+      RefFresnelFactor="21.96"
+      RefFresnelHardness="0.00"
+      RefFresnelRange="57.84"
+      RefThickness="80.00"
+      ShapeRadius="0.92"
+      ShapeRoundness="3.84" />
+
+    <lg:LiquidGlassBrush
+      x:Name="Preset_ThinTinted"
+      BlurAmount="1.93"
+      DispersionRange="0.39"
+      Exposure="0.6"
+      GlareAngle="-135.00"
+      GlareConvergence="100.00"
+      GlareFactor="71.52"
+      GlareHardness="13.00"
+      GlareRange="36.13"
+      RefDispersion="3.50"
+      RefFactor="1.31"
+      RefFresnelFactor="21.96"
+      RefFresnelHardness="0.00"
+      RefFresnelRange="57.84"
+      RefThickness="22.52"
+      ShapeRadius="1.00"
+      ShapeRoundness="2.00"
+      TintA="0.70" />
+
+    <lg:LiquidGlassBrush
+      x:Name="Preset_Magnified"
+      BlurAmount="0.00"
+      DispersionRange="0.32"
+      GlareAngle="-125.92"
+      GlareConvergence="100.00"
+      GlareFactor="71.52"
+      GlareHardness="13.00"
+      GlareRange="20.44"
+      Magnification="1.04"
+      RefDispersion="9.94"
+      RefFactor="1.21"
+      RefFresnelFactor="23.25"
+      RefFresnelHardness="3.64"
+      RefFresnelRange="57.84"
+      RefThickness="39.78"
+      ShapeRadius="1.00"
+      ShapeRoundness="2.00" />
   </Page.Resources>
 
   <Grid>
@@ -374,6 +442,14 @@
             Content="Reset" />
         </StackPanel>
 
+        <!--  Preset ComboBox — populated from x:Name'd brush resources in code-behind  -->
+        <ComboBox
+          x:Name="PresetPicker"
+          Margin="0,6,0,0"
+          Header="Preset"
+          PlaceholderText="Choose a preset…"
+          SelectionChanged="PresetPicker_SelectionChanged" />
+
         <!--
           Size — bound straight to the glass control's Width/Height
           (FrameworkElement DPs), so the slider resizes the glass live.
@@ -433,21 +509,21 @@
             Text="Refraction" />
           <Slider
             Header="Thickness"
-            Maximum="80"
+            Maximum="1000"
             Minimum="0"
             SnapsTo="StepValues"
             StepFrequency="0.01"
             Value="{x:Bind GlassBrush.RefThickness, Mode=TwoWay}" />
           <Slider
             Header="Factor (IOR)"
-            Maximum="4"
+            Maximum="10"
             Minimum="1"
             SnapsTo="StepValues"
             StepFrequency="0.01"
             Value="{x:Bind GlassBrush.RefFactor, Mode=TwoWay}" />
           <Slider
             Header="Dispersion"
-            Maximum="50"
+            Maximum="1"
             Minimum="0"
             SnapsTo="StepValues"
             StepFrequency="0.01"

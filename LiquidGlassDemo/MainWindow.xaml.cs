@@ -4,11 +4,18 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Collections.Generic;
 
 namespace LiquidGlassDemo;
 
 public sealed partial class MainWindow : Window
 {
+    // Page cache avoids the WinUI 3 Frame.NavigateToType() crash on second
+    // navigation with controls that own internal popups (ComboBox, ContentDialog).
+    // NavigateToType() destroys and re-creates Page instances, but compositor
+    // teardown of popup windows is asynchronous — a new instance created before
+    // the old one fully tears down can hit stale compositor state (0xC0000005).
+    private readonly Dictionary<Type, Page> _pageCache = new();
     private readonly DispatcherQueueTimer timer;
 
     public MainWindow()
@@ -34,9 +41,17 @@ public sealed partial class MainWindow : Window
                 "DialPage" => typeof(DialPage),
                 "StressPage" => typeof(StressPage),
                 "TabBarPage" => typeof(TabBarPage),
+                "StoryboardPage" => typeof(StoryboardPage),
                 _ => typeof(DevPage),
             };
-            MainFrame.NavigateToType(pageType, null, null);
+
+            //if (!_pageCache.TryGetValue(pageType, out var page))
+            //{
+            //    page = (Page)Activator.CreateInstance(pageType)!;
+            //    _pageCache[pageType] = page;
+            //}
+            //MainFrame.Content = page;
+            MainFrame.Navigate(pageType);
         }
     }
 

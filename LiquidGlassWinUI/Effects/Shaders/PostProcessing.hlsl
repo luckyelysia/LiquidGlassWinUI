@@ -39,7 +39,7 @@ float4 Core(float2 uv, float4 samplerDataExt, float4 sample1)
     // 1. Bloom blend — cross-fade between blurred backdrop and raw backdrop.
     float4 blurred = texture0.Sample(sampler0, uv);
     float b = saturate(BloomAmount);
-    float3 color = lerp(blurred.rgb, sample1.rgb, b);
+    float3 color = lerp(sample1.rgb, blurred.rgb, b);
     float alpha = blurred.a; // preserve blurred alpha for downstream premultiplied blending
 
     // 2. Exposure (multiplicative gain).

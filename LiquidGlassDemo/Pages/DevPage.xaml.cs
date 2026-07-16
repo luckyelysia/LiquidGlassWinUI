@@ -4,11 +4,13 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using Windows.Foundation;
@@ -29,7 +31,7 @@ namespace LiquidGlassDemo.Pages
         {
             ["RefThickness"]       = 20,
             ["RefFactor"]          = 1.4,
-            ["RefDispersion"]      = 7,
+            ["RefDispersion"]      = 1,
             ["DispersionRange"]    = 1.0,
             ["RefFresnelRange"]    = 30,
             ["RefFresnelHardness"] = 20,
@@ -56,6 +58,15 @@ namespace LiquidGlassDemo.Pages
             ["ShapeRadius"]        = 0.4,
             ["ShapeRoundness"]     = 5,
         };
+
+        // ── presets ───────────────────────────────────────────────────────────
+        //     Each preset is a named <lg:LiquidGlassBrush> resource in the XAML.
+        //     This list maps their x:Name → display name for the ComboBox.
+        //     To add a preset:
+        //       1. Tweak sliders → Copy XAML → paste as new resource above
+        //       2. Add a ("Display Name", Preset_YourName) entry below
+
+        private (string Label, LiquidGlassWinUI.LiquidGlassBrush Brush)[] _presets = null!;
 
         // Ordered list for deterministic code-gen output.
         private static readonly (string name, string xamlAttr)[] ParamOrder =
@@ -90,9 +101,25 @@ namespace LiquidGlassDemo.Pages
             ("ShapeRoundness",      "ShapeRoundness"),
         };
 
+        // Reflection handles for the params above, so the Storyboard preset
+        // transition can read/write every DP by name without a giant switch.
+        private static readonly PropertyInfo[] s_paramProps =
+            ParamOrder.Select(p => typeof(LiquidGlassWinUI.LiquidGlassBrush).GetProperty(p.name)!).ToArray();
+
         public DevPage()
         {
             InitializeComponent();
+
+            // Wire up presets from the named XAML brush resources.
+            _presets = new (string, LiquidGlassWinUI.LiquidGlassBrush)[]
+            {
+                ("Default",       Preset_Default),
+                ("Thin + Tinted", Preset_ThinTinted),
+                ("Magnified",     Preset_Magnified),
+            };
+
+            foreach (var (label, _) in _presets)
+                PresetPicker.Items.Add(new ComboBoxItem { Content = label });
 
             // Sync initial TintPicker colour from brush defaults.
             TintPicker.Color = new Windows.UI.Color
@@ -124,6 +151,101 @@ namespace LiquidGlassDemo.Pages
             GlassBrush.TintA = c.A / 255.0;
 
             _updatingTint = false;
+        }
+
+        // ── preset picker ─────────────────────────────────────────────────
+        //     Cross-fades every material parameter to the preset via a UI-thread
+        //     Storyboard (one DoubleAnimation per param, EnableDependentAnimation).
+        //     Unlike LiquidGlassBrush.TransitionTo (compositor-thread; the DPs only
+        //     update at the very end), this writes the DPs every frame — so every
+        //     TwoWay-bound slider on the right rides along with the transition.
+
+        private Storyboard? _transitionStoryboard;
+        private LiquidGlassWinUI.LiquidGlassBrush? _transitionTarget;
+
+        private void PresetPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var idx = PresetPicker.SelectedIndex;
+            if (idx < 0 || idx >= _presets.Length) return;
+
+            var target = _presets[idx].Brush;
+            TransitionToViaStoryboard(target, durationMs: 400);
+
+            // Sync tint picker.
+            _updatingTint = true;
+            TintPicker.Color = new Windows.UI.Color
+            {
+                R = (byte)target.TintR,
+                G = (byte)target.TintG,
+                B = (byte)target.TintB,
+                A = (byte)(target.TintA * 255),
+            };
+            _updatingTint = false;
+        }
+
+        // Build & run a one-shot Storyboard animating every param from its current
+        // value to the preset's. Default FillBehavior (HoldEnd) pins the endpoint;
+        // Completed then commits those endpoints as the base DP values and Stops the
+        // hold — the Storyboard analogue of TransitionTo's Batch_Completed sync — so
+        // the sliders land exactly on the preset and stay draggable afterwards.
+        private void TransitionToViaStoryboard(LiquidGlassWinUI.LiquidGlassBrush target, double durationMs)
+        {
+            // Snapshot current (possibly mid-transition) values BEFORE cancelling
+            // the previous storyboard, so From is the on-screen value.
+            double[] fromValues = new double[s_paramProps.Length];
+            for (int i = 0; i < s_paramProps.Length; i++)
+                fromValues[i] = (double)s_paramProps[i].GetValue(GlassBrush)!;
+
+            if (_transitionStoryboard != null)
+            {
+                _transitionStoryboard.Completed -= Transition_Completed;
+                _transitionStoryboard.Stop();
+                _transitionStoryboard = null;
+            }
+
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            TimeSpan duration = TimeSpan.FromMilliseconds(durationMs);
+
+            var sb = new Storyboard();
+            for (int i = 0; i < s_paramProps.Length; i++)
+            {
+                double to = (double)s_paramProps[i].GetValue(target)!;
+                var anim = new DoubleAnimation
+                {
+                    From = fromValues[i],
+                    To = to,
+                    Duration = duration,
+                    EnableDependentAnimation = true,
+                    EasingFunction = ease,
+                };
+                Storyboard.SetTarget(anim, GlassBrush);
+                Storyboard.SetTargetProperty(anim, s_paramProps[i].Name);
+                sb.Children.Add(anim);
+            }
+
+            _transitionTarget = target;
+            sb.Completed += Transition_Completed;
+            _transitionStoryboard = sb;
+            sb.Begin();
+        }
+
+        private void Transition_Completed(object sender, object e)
+        {
+            if (_transitionTarget != null)
+            {
+                // Commit endpoints as base values, then release the HoldEnd so the
+                // base values own the properties (and the sliders) again.
+                foreach (var prop in s_paramProps)
+                    prop.SetValue(GlassBrush, prop.GetValue(_transitionTarget));
+            }
+
+            if (_transitionStoryboard != null)
+            {
+                _transitionStoryboard.Completed -= Transition_Completed;
+                _transitionStoryboard.Stop();
+                _transitionStoryboard = null;
+            }
+            _transitionTarget = null;
         }
 
         // ── utility buttons ────────────────────────────────────────────────
@@ -232,6 +354,13 @@ namespace LiquidGlassDemo.Pages
             await System.Threading.Tasks.Task.Delay(1200);
             btn.Content = original;
             btn.IsEnabled = true;
+        }
+
+        private void Page_Loaded(object sender, RoutedEventArgs e)
+        {
+            RotateAnim.Begin();
+            PulseAnim.Begin();
+            BounceAnim.Begin();
         }
     }
 }

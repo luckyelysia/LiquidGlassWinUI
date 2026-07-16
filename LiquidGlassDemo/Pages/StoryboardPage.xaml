@@ -1,0 +1,461 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  StoryboardPage — experiments with driving LiquidGlassBrush from XAML Storyboards.
+
+  The brush exposes every material parameter as a DependencyProperty whose
+  changed callback (OnXxxChanged -> ApplyParam -> Properties.InsertScalar)
+  forwards the value to the composition effect. A XAML DoubleAnimation that
+  targets one of those DPs therefore re-paints the glass on every storyboard
+  tick — no code-behind needed to drive the material. This page exercises that
+  path three ways:
+
+    1. MorphStoryboard   (declared here) — forever/auto-reverse morph of many DPs.
+    2. GlareSpinStoryboard (declared here) — continuous glare rotation.
+    3. Spike_Click       (code-behind)   — a one-shot Storyboard built in C#.
+
+  The live readout (DispatcherQueueTimer reading the DP getters) confirms the
+  properties are actually being animated: GetValue returns the animated value
+  while a Storyboard holds the property.
+-->
+<Page
+  x:Class="LiquidGlassDemo.Pages.StoryboardPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:lg="using:LiquidGlassWinUI"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  Background="#181818"
+  Loaded="Page_Loaded"
+  Unloaded="Page_Unloaded"
+  mc:Ignorable="d">
+
+  <Page.Resources>
+    <!--  backdrop palette  -->
+    <SolidColorBrush x:Key="CardA" Color="#FFEF5350" />
+    <SolidColorBrush x:Key="CardB" Color="#FFFFA726" />
+    <SolidColorBrush x:Key="CardC" Color="#FF66BB6A" />
+    <SolidColorBrush x:Key="CardD" Color="#FF42A5F5" />
+    <SolidColorBrush x:Key="Pal1" Color="#FF26C6DA" />
+    <SolidColorBrush x:Key="Pal2" Color="#FFEC407A" />
+    <SolidColorBrush x:Key="Pal3" Color="#FFAB47BC" />
+    <SolidColorBrush x:Key="Pal4" Color="#FF7E57C2" />
+    <SolidColorBrush x:Key="Pal5" Color="#FF5C6BC0" />
+    <SolidColorBrush x:Key="Pal6" Color="#FF26A69A" />
+
+    <!--  Cosmetic backdrop motion: a slow-spinning orb behind the glass. This  -->
+    <!--  animates the SCENE, not the brush — it just gives the glass something  -->
+    <!--  colorful to refract.                                                   -->
+    <Storyboard x:Name="BackdropSpin" RepeatBehavior="Forever">
+      <DoubleAnimation
+        Storyboard.TargetName="SceneOrb"
+        Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+        From="0"
+        To="360"
+        Duration="0:0:14" />
+    </Storyboard>
+
+    <!--
+      THE EXPERIMENT — MorphStoryboard.
+      Every DoubleAnimation targets a dependency property on the named brush
+      (GlassBrush). All share a 3.5 s ease-in-out cycle and the parent is
+      AutoReverse + Forever, so the whole material "breathes" in sync.
+
+      WinUI note: animating a custom DP (any of the brush params) is a
+      "dependent animation", which WinUI DISABLES BY DEFAULT. Each animation
+      must carry EnableDependentAnimation="True" or it silently does nothing.
+
+      Notes on the chosen ranges:
+        - BlurAmount stays strictly > 0. Crossing 0 toggles blur bypass, which
+          is a discrete backdrop-source swap (see ApplyBlurAmount); keeping it
+          positive keeps the morph visually continuous.
+        - Magnification is DELIBERATELY ABSENT so the code-built Spike_Click
+          one-shot can own it without fighting this loop.
+        - GlareAngle is driven by the separate GlareSpinStoryboard below
+          (continuous rotation looks better than a pendulum).
+    -->
+    <Storyboard
+      x:Name="MorphStoryboard"
+      AutoReverse="True"
+      RepeatBehavior="Forever">
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="RefThickness"
+        From="6"
+        To="52"
+        Duration="0:0:3.5"
+        EnableDependentAnimation="True">
+        <DoubleAnimation.EasingFunction>
+          <CubicEase EasingMode="EaseInOut" />
+        </DoubleAnimation.EasingFunction>
+      </DoubleAnimation>
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="GlareFactor"
+        From="35"
+        To="120"
+        Duration="0:0:3.5"
+        EnableDependentAnimation="True">
+        <DoubleAnimation.EasingFunction>
+          <CubicEase EasingMode="EaseInOut" />
+        </DoubleAnimation.EasingFunction>
+      </DoubleAnimation>
+      <!--  > 0 throughout: no bypass source-swap mid-morph  -->
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="BlurAmount"
+        From="0.6"
+        To="4.2"
+        Duration="0:0:3.5"
+        EnableDependentAnimation="True">
+        <DoubleAnimation.EasingFunction>
+          <CubicEase EasingMode="EaseInOut" />
+        </DoubleAnimation.EasingFunction>
+      </DoubleAnimation>
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="DispersionRange"
+        From="0.15"
+        To="1.0"
+        Duration="0:0:3.5"
+        EnableDependentAnimation="True">
+        <DoubleAnimation.EasingFunction>
+          <CubicEase EasingMode="EaseInOut" />
+        </DoubleAnimation.EasingFunction>
+      </DoubleAnimation>
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="RefFactor"
+        From="1.1"
+        To="3.1"
+        Duration="0:0:3.5"
+        EnableDependentAnimation="True">
+        <DoubleAnimation.EasingFunction>
+          <CubicEase EasingMode="EaseInOut" />
+        </DoubleAnimation.EasingFunction>
+      </DoubleAnimation>
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="TintA"
+        From="0"
+        To="0.45"
+        Duration="0:0:3.5"
+        EnableDependentAnimation="True">
+        <DoubleAnimation.EasingFunction>
+          <CubicEase EasingMode="EaseInOut" />
+        </DoubleAnimation.EasingFunction>
+      </DoubleAnimation>
+      <!--  PostProcessingEffect params  -->
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="Temperature"
+        From="-0.5"
+        To="0.6"
+        Duration="0:0:3.5"
+        EnableDependentAnimation="True">
+        <DoubleAnimation.EasingFunction>
+          <CubicEase EasingMode="EaseInOut" />
+        </DoubleAnimation.EasingFunction>
+      </DoubleAnimation>
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="Saturation"
+        From="0.7"
+        To="1.6"
+        Duration="0:0:3.5"
+        EnableDependentAnimation="True">
+        <DoubleAnimation.EasingFunction>
+          <CubicEase EasingMode="EaseInOut" />
+        </DoubleAnimation.EasingFunction>
+      </DoubleAnimation>
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="ShapeRadius"
+        From="0.25"
+        To="0.85"
+        Duration="0:0:3.5"
+        EnableDependentAnimation="True">
+        <DoubleAnimation.EasingFunction>
+          <CubicEase EasingMode="EaseInOut" />
+        </DoubleAnimation.EasingFunction>
+      </DoubleAnimation>
+    </Storyboard>
+
+    <!--  Continuous glare rotation. GlareAngle is periodic, so 0 -> 360 loops  -->
+    <!--  seamlessly (360 deg == 0 deg) instead of the pendulum AutoReverse gives.  -->
+    <Storyboard x:Name="GlareSpinStoryboard" RepeatBehavior="Forever">
+      <DoubleAnimation
+        Storyboard.TargetName="GlassBrush"
+        Storyboard.TargetProperty="GlareAngle"
+        From="0"
+        To="360"
+        Duration="0:0:6"
+        EnableDependentAnimation="True" />
+    </Storyboard>
+  </Page.Resources>
+
+  <Grid>
+    <!--  Backdrop scene: colorful content for the glass to refract  -->
+    <ScrollViewer
+      HorizontalScrollBarVisibility="Disabled"
+      HorizontalScrollMode="Disabled"
+      VerticalScrollBarVisibility="Auto">
+      <StackPanel Width="720" Margin="0,0,0,140">
+
+        <!--  Header banner  -->
+        <Border Height="220" Padding="32">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+              <GradientStop Offset="0" Color="#FFB5179E" />
+              <GradientStop Offset="0.5" Color="#FF7B2CBF" />
+              <GradientStop Offset="1" Color="#FF3A0CA3" />
+            </LinearGradientBrush>
+          </Border.Background>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock
+              FontSize="48"
+              FontWeight="Bold"
+              Foreground="White"
+              Text="STORYBOARD" />
+            <TextBlock
+              Margin="0,8,0,0"
+              FontSize="18"
+              Foreground="#CCFFFFFF"
+              Text="a LiquidGlassBrush driven entirely from XAML animations"
+              TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <TextBlock
+          Margin="32,20,32,8"
+          FontSize="15"
+          Foreground="#FFB0BEC5"
+          Text="Each DoubleAnimation below targets a brush dependency property; the brush forwards every tick to the composition effect. Use the dock to play, scrub speed, or fire a code-built one-shot."
+          TextWrapping="Wrap" />
+
+        <!--  Colored cards  -->
+        <Grid Margin="32,16,32,16">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition />
+            <ColumnDefinition />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition />
+            <ColumnDefinition />
+          </Grid.ColumnDefinitions>
+          <Border
+            Grid.Column="0"
+            Height="120"
+            Background="{StaticResource CardA}"
+            CornerRadius="14" />
+          <Border
+            Grid.Column="1"
+            Height="120"
+            Background="{StaticResource CardB}"
+            CornerRadius="14" />
+          <Border
+            Grid.Column="3"
+            Height="120"
+            Background="{StaticResource CardC}"
+            CornerRadius="14" />
+          <Border
+            Grid.Column="4"
+            Height="120"
+            Background="{StaticResource CardD}"
+            CornerRadius="14" />
+        </Grid>
+
+        <!--  Animated orb (drives the scene, not the brush)  -->
+        <Grid
+          Height="200"
+          Margin="32,4,32,16"
+          HorizontalAlignment="Center">
+          <Border
+            x:Name="SceneOrb"
+            Width="160"
+            Height="160"
+            CornerRadius="80"
+            RenderTransformOrigin="0.5,0.5">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Offset="0" Color="#FF00E5FF" />
+                <GradientStop Offset="0.5" Color="#FF7C4DFF" />
+                <GradientStop Offset="1" Color="#FFFF4081" />
+              </LinearGradientBrush>
+            </Border.Background>
+            <Border.RenderTransform>
+              <RotateTransform />
+            </Border.RenderTransform>
+          </Border>
+        </Grid>
+
+        <!--  Palette  -->
+        <GridView
+          Margin="32,0,32,16"
+          IsHitTestVisible="False"
+          SelectionMode="None">
+          <Border
+            Width="92"
+            Height="92"
+            Background="{StaticResource Pal1}" />
+          <Border
+            Width="92"
+            Height="92"
+            Background="{StaticResource Pal2}" />
+          <Border
+            Width="92"
+            Height="92"
+            Background="{StaticResource Pal3}" />
+          <Border
+            Width="92"
+            Height="92"
+            Background="{StaticResource Pal4}" />
+          <Border
+            Width="92"
+            Height="92"
+            Background="{StaticResource Pal5}" />
+          <Border
+            Width="92"
+            Height="92"
+            Background="{StaticResource Pal6}" />
+        </GridView>
+
+        <!--  Lorem  -->
+        <TextBlock
+          Margin="32,8,32,14"
+          FontSize="15"
+          Foreground="#FFB0BEC5"
+          Text="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+          TextWrapping="Wrap" />
+        <TextBlock
+          Margin="32,0,32,14"
+          FontSize="15"
+          Foreground="#FFB0BEC5"
+          Text="Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium."
+          TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!--  Glass specimen — the named brush the storyboards target  -->
+    <Border
+      x:Name="GlassPanel"
+      Width="540"
+      Height="180"
+      HorizontalAlignment="Center"
+      VerticalAlignment="Center"
+      CornerRadius="34">
+      <Border.Background>
+        <lg:LiquidGlassBrush
+          x:Name="GlassBrush"
+          BlurAmount="1.5"
+          DispersionRange="0.5"
+          Exposure="1.0"
+          GlareAngle="-45"
+          GlareFactor="90"
+          GlareHardness="14"
+          GlareRange="30"
+          RefFactor="1.6"
+          RefThickness="20"
+          ShapeRadius="0.5"
+          ShapeRoundness="5"
+          TintA="0.08" />
+      </Border.Background>
+      <StackPanel
+        HorizontalAlignment="Center"
+        VerticalAlignment="Center"
+        Spacing="4">
+        <TextBlock
+          FontSize="40"
+          FontWeight="Bold"
+          Foreground="White"
+          Text="liquid glass" />
+        <TextBlock
+          FontSize="14"
+          Foreground="#CCFFFFFF"
+          Text="animated by Storyboard.DoubleAnimation" />
+      </StackPanel>
+    </Border>
+
+    <!--  Control dock  -->
+    <Border
+      Margin="24,0,24,24"
+      Padding="16"
+      VerticalAlignment="Bottom"
+      BorderBrush="#33FFFFFF"
+      BorderThickness="1"
+      CornerRadius="16">
+      <Border.Background>
+        <SolidColorBrush Color="#F0121216" />
+      </Border.Background>
+      <StackPanel Spacing="10">
+
+        <!--  Transport row  -->
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button
+            Click="Begin_Click"
+            Content="Begin" />
+          <Button
+            Click="Pause_Click"
+            Content="Pause" />
+          <Button
+            Click="Resume_Click"
+            Content="Resume" />
+          <Button
+            Click="Stop_Click"
+            Content="Stop" />
+          <Border
+            Width="1"
+            Margin="6,4"
+            HorizontalAlignment="Stretch"
+            Background="#33FFFFFF" />
+          <Button
+            Click="Spike_Click"
+            Content="Magnify (code)" />
+          <Border Width="12" />
+          <TextBlock
+            VerticalAlignment="Center"
+            FontSize="13"
+            Foreground="#FFB0BEC5"
+            Text="Speed" />
+          <Slider
+            x:Name="SpeedSlider"
+            Width="160"
+            Maximum="3"
+            Minimum="0.25"
+            StepFrequency="0.05"
+            Value="1"
+            ValueChanged="SpeedSlider_ValueChanged" />
+          <TextBlock
+            x:Name="SpeedText"
+            VerticalAlignment="Center"
+            FontSize="13"
+            Foreground="White"
+            Text="1.0x" />
+        </StackPanel>
+
+        <!--  Options + live readout row  -->
+        <StackPanel Orientation="Horizontal" Spacing="20">
+          <CheckBox
+            x:Name="GlareSpinCheck"
+            Checked="GlareSpinCheck_CheckedChanged"
+            Content="Glare spin"
+            IsChecked="True"
+            Unchecked="GlareSpinCheck_CheckedChanged" />
+          <Border
+            Width="1"
+            Background="#33FFFFFF" />
+          <TextBlock
+            VerticalAlignment="Center"
+            FontSize="12"
+            FontFamily="Consolas"
+            Foreground="#FFCE93D8">
+            <Run Text="Ref=" /><Run x:Name="RefThicknessText" Text="20.0" /><Run Text="  " />
+            <Run Text="Angle=" /><Run x:Name="GlareAngleText" Text="-45°" /><Run Text="  " />
+            <Run Text="Blur=" /><Run x:Name="BlurAmountText" Text="1.50" /><Run Text="  " />
+            <Run Text="TintA=" /><Run x:Name="TintAText" Text="0.08" /><Run Text="  " />
+            <Run Text="Mag=" /><Run x:Name="MagnificationText" Text="1.00" />
+          </TextBlock>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Page>

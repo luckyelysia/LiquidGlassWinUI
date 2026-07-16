@@ -36,6 +36,10 @@
         Content="TabBar"
         Icon="DockBottom"
         Tag="TabBarPage" />
+      <NavigationViewItem
+        Content="Storyboard"
+        Icon="Play"
+        Tag="StoryboardPage" />
     </NavigationView.MenuItems>
     <Frame x:Name="MainFrame" />
   </NavigationView>

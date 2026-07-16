@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using LiquidGlassWinUI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
@@ -10,7 +11,11 @@ namespace LiquidGlassDemo.Pages;
 
 public sealed partial class DialPage : Page
 {
-    private readonly List<Button> _dialButtons = new();
+    /// <summary>
+    /// Each dial button paired with its LiquidGlassBrush and the registration
+    /// token for the IsPressed property-change callback (so we can unregister).
+    /// </summary>
+    private readonly List<(Button Button, LiquidGlassBrush Brush, long Token)> _dialButtons = new();
 
     public DialPage()
     {
@@ -20,73 +25,79 @@ public sealed partial class DialPage : Page
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        Loaded -= OnLoaded;
         FindDialButtons(DialPadGrid);
     }
+
+    // ── discover dial buttons & wire up IsPressed → Exposure ────────────
 
     private void FindDialButtons(DependencyObject parent)
     {
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {
             var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is Button btn && btn.Background is LiquidGlassBrush)
+            if (child is Button btn)
             {
-                _dialButtons.Add(btn);
+                var brush = FindGlassBrush(btn);
+                if (brush != null)
+                {
+                    // ButtonBase.IsPressed is managed by the VSM CommonStates
+                    // group — it tracks Normal / PointerOver / Pressed correctly
+                    // including capture-lost and pointer-exit edge cases.
+                    var token = btn.RegisterPropertyChangedCallback(
+                        ButtonBase.IsPressedProperty,
+                        OnDialKeyIsPressedChanged);
 
-                // handledEventsToo: true — Button handles PointerPressed internally
-                // (for Click + visual state), so the default CLR event doesn't fire.
-                btn.AddHandler(
-                    UIElement.PointerPressedEvent,
-                    new PointerEventHandler(DialKey_PointerPressed),
-                    handledEventsToo: true);
-
-                btn.AddHandler(
-                    UIElement.PointerReleasedEvent,
-                    new PointerEventHandler(DialKey_PointerReleased),
-                    handledEventsToo: true);
-
-                btn.PointerExited += DialKey_PointerExited;
-                btn.PointerCaptureLost += DialKey_PointerCaptureLost;
+                    _dialButtons.Add((btn, brush, token));
+                }
             }
             FindDialButtons(child);
         }
     }
 
-    // ── pointer events — animate tint via compositor-thread animation ────
-
-    private static void DialKey_PointerPressed(object sender, PointerRoutedEventArgs e)
+    /// <summary>
+    /// Walk inside a Button's ControlTemplate to find the Border named
+    /// "GlassBorder" and return its LiquidGlassBrush Background.
+    /// </summary>
+    private static LiquidGlassBrush? FindGlassBrush(DependencyObject parent)
     {
-        if (((Button)sender).Background is LiquidGlassBrush brush)
-            brush.AnimateScalar("Exposure", 1.8f, 220);
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is Border { Name: "GlassBorder" } border)
+                return border.Background as LiquidGlassBrush;
+            var found = FindGlassBrush(child);
+            if (found != null) return found;
+        }
+        return null;
     }
 
-    private static void DialKey_PointerReleased(object sender, PointerRoutedEventArgs e)
+    // ── Exposure animation via compositor-thread animation ───────────────
+    //     VSM DoubleAnimation does NOT work for XamlCompositionBrushBase
+    //     subclass DPs (confirmed in WinUI 3 AcrylicBrush source — only
+    //     CompositionAnimation drives brush properties correctly).
+
+    private static void OnDialKeyIsPressedChanged(DependencyObject d, DependencyProperty dp)
     {
-        if (((Button)sender).Background is LiquidGlassBrush brush)
-            brush.AnimateScalar("Exposure", 1, 150);
+        var btn = (Button)d;
+
+        // Navigate into the applied template to find the named GlassBrush.
+        // This is fast — the template tree is shallow.
+        var brush = FindGlassBrush(btn);
+        if (brush == null) return;
+
+        bool pressed = (bool)btn.GetValue(dp);
+        brush.AnimateScalar("Exposure", pressed ? 1.8f : 1f, pressed ? 220 : 150);
     }
 
-    private static void DialKey_PointerExited(object sender, PointerRoutedEventArgs e)
-    {
-        if (((Button)sender).Background is LiquidGlassBrush brush)
-            brush.AnimateScalar("Exposure", 1, 150);
-    }
-
-    private static void DialKey_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
-    {
-        if (((Button)sender).Background is LiquidGlassBrush brush)
-            brush.AnimateScalar("Exposure", 1, 150);
-    }
-
-    // ── glare follow ────────────────────────────────────────────────────
+    // ── glare follow — continuous mouse tracking; VSM cannot express this ──
 
     private void DialPad_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         var pos = e.GetCurrentPoint(DialPadGrid).Position;
 
-        foreach (var btn in _dialButtons)
+        foreach (var (btn, brush, _) in _dialButtons)
         {
-            if (btn.Background is not LiquidGlassBrush brush) continue;
-
             var transform = btn.TransformToVisual(DialPadGrid);
             var origin = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
             var cx = origin.X + btn.ActualWidth / 2;
